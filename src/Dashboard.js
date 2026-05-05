@@ -595,7 +595,7 @@ function Dashboard({ user }) {
     <div className="dashboard">
       <header className="header">
         <div className="header-left">
-          <h1>KQF Discount Flooring</h1>
+          <h1>Nigga's Discount Flooring</h1>
           <span className="header-subtitle">Lead Management</span>
         </div>
         <div className="header-right">
