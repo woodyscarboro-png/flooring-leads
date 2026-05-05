@@ -360,6 +360,7 @@ function AddProspectModal({ onClose, onAdd }) {
     textTransform:"uppercase",letterSpacing:"0.05em",
     display:"block",marginBottom:3
   };
+  // eslint-disable-next-line no-unused-vars
   const fld = (label, key, opts={}) => (
     <div style={{marginBottom:10,...(opts.style||{})}}>
       <label style={lbl}>{label}</label>
