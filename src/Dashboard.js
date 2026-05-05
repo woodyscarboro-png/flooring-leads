@@ -135,6 +135,7 @@ function LeadModal({ lead, onClose, onSave }) {
 
   useEffect(() => {
     if (tab === "followup") loadFu();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   const loadFu = async () => {
