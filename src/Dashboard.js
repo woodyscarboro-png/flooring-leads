@@ -389,12 +389,14 @@ function AddProspectModal({ onClose, onAdd }) {
         <div style={{flex:1,overflowY:"auto",padding:20}}>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
             {fld("Owner Name","owner_name")}
             {fld("Mailing Address","owner_mailing_address")}
-            {fld("City","city")}
-            {fld("State","state")}
-            {fld("Zip","zip")}
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px"}}>
+              {fld("City","city")}
+              {fld("State","state")}
+              {fld("Zip","zip")}
+            </div>
             {fld("Phone Number","owner_phone")}
             {fld("Email Address","owner_email")}
             {fld("Fax","owner_fax")}
@@ -403,12 +405,14 @@ function AddProspectModal({ onClose, onAdd }) {
           </div>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
             {fld("Contractor Name","contractor_name")}
             {fld("Business Address","contractor_address")}
-            {fld("City","contractor_city")}
-            {fld("State","contractor_state")}
-            {fld("Zip","contractor_zip")}
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px"}}>
+              {fld("City","contractor_city")}
+              {fld("State","contractor_state")}
+              {fld("Zip","contractor_zip")}
+            </div>
             {fld("Phone Number","contractor_phone")}
             {fld("Email Address","contractor_email")}
             {fld("Fax","contractor_fax")}
