@@ -101,6 +101,336 @@ const nb = {
   borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:12
 };
 
+// ─── Reports Modal ───────────────────────────────────────────────────────────
+function ReportsModal({ leads, onClose }) {
+  const [reportType, setReportType] = useState(null);
+  const [followups, setFollowups] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const RTDB = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
+
+  const loadAllFollowups = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`${RTDB}/followups.json`);
+      const data = await resp.json();
+      if (data) {
+        const all = [];
+        Object.entries(data).forEach(([leadId, fus]) => {
+          const lead = leads.find(l => l.id === leadId) || {};
+          Object.entries(fus).forEach(([fuId, fu]) => {
+            all.push({ id: fuId, leadId, ...fu,
+              owner_name: lead.owner_name || lead.contractor_name || "",
+              owner_phone: lead.owner_phone || lead.contractor_phone || "",
+              owner_email: lead.owner_email || "",
+              property_address: lead.property_address || "",
+              county: lead.county || "",
+              contractor_name: lead.contractor_name || "",
+              contractor_phone: lead.contractor_phone || "",
+              lead_score: lead.lead_score || "",
+              notes: lead.notes || "",
+            });
+          });
+        });
+        all.sort((a,b) => a.date > b.date ? 1 : -1);
+        setFollowups(all);
+      }
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAllFollowups(); }, []);
+
+  const today = new Date().toISOString().split("T")[0];
+  const weekStart = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay());
+    return d.toISOString().split("T")[0];
+  })();
+  const weekEnd = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + (6 - d.getDay()));
+    return d.toISOString().split("T")[0];
+  })();
+  const monthStart = today.slice(0,7) + "-01";
+  const monthEnd = today.slice(0,7) + "-31";
+
+  const filterFu = (start, end) =>
+    followups.filter(f => f.date >= start && f.date <= end);
+
+  const reportOptions = [
+    { id: "today",    label: "Today's Follow-Ups",       data: () => filterFu(today, today) },
+    { id: "week",     label: "This Week's Follow-Ups",    data: () => filterFu(weekStart, weekEnd) },
+    { id: "month",    label: "This Month's Follow-Ups",   data: () => filterFu(monthStart, monthEnd) },
+    { id: "upcoming", label: "All Upcoming Follow-Ups",   data: () => followups.filter(f => f.date >= today) },
+    { id: "all_fu",   label: "All Follow-Ups Ever",       data: () => followups },
+    { id: "new",      label: "All New Leads",             data: () => leads.filter(l => !l.status || l.status === "New") },
+    { id: "contacted",label: "All Contacted Leads",       data: () => leads.filter(l => l.status === "Contacted") },
+    { id: "quoted",   label: "All Quoted Leads",          data: () => leads.filter(l => l.status === "Quoted") },
+    { id: "won",      label: "All Won Leads",             data: () => leads.filter(l => l.status === "Won") },
+    { id: "lost",     label: "All Lost Leads",            data: () => leads.filter(l => l.status === "Lost") },
+  ];
+
+  const printReport = (option) => {
+    const data = option.data();
+    if (!data || data.length === 0) {
+      alert("No records found for this report.");
+      return;
+    }
+    const isFollowup = ["today","week","month","upcoming","all_fu"].includes(option.id);
+    const now = new Date().toLocaleString("en-US",{
+      month:"long",day:"numeric",year:"numeric",
+      hour:"numeric",minute:"2-digit",hour12:true
+    });
+
+    let rows = "";
+    if (isFollowup) {
+      rows = data.map(f => `
+        <div class="card">
+          <div class="card-header">
+            <strong>${f.date} at ${f.time || ""}</strong> &nbsp;|&nbsp;
+            ${f.type || ""} &nbsp;|&nbsp;
+            <span class="status">${f.status || ""}</span>
+          </div>
+          <table>
+            <tr><td class="lbl">Owner</td><td>${f.owner_name || "—"}</td>
+                <td class="lbl">Phone</td><td>${f.owner_phone || "—"}</td></tr>
+            <tr><td class="lbl">Email</td><td>${f.owner_email || "—"}</td>
+                <td class="lbl">Property</td><td>${f.property_address || "—"}</td></tr>
+            <tr><td class="lbl">Contractor</td><td>${f.contractor_name || "—"}</td>
+                <td class="lbl">Contractor Ph</td><td>${f.contractor_phone || "—"}</td></tr>
+            <tr><td class="lbl">County</td><td>${f.county || "—"}</td>
+                <td class="lbl">Score</td><td>${f.lead_score || "—"}/10</td></tr>
+          </table>
+          <div class="notes-label">Follow-Up Notes:</div>
+          <div class="notes">${f.notes || "(none)"}</div>
+          <div class="notes-label">Lead Notes:</div>
+          <div class="notes">${f.notes || "(none)"}</div>
+        </div>`).join("");
+    } else {
+      rows = data.map(l => `
+        <div class="card">
+          <div class="card-header">
+            <strong>${l.owner_name || l.contractor_name || "Unknown"}</strong>
+            &nbsp;|&nbsp; ${l.property_address || "—"}
+            &nbsp;|&nbsp; ${l.county || ""} County
+            &nbsp;|&nbsp; Score: ${l.lead_score || "?"}/10
+            &nbsp;|&nbsp; <span class="status">${l.status || "New"}</span>
+          </div>
+          <table>
+            <tr><td class="lbl">Owner Phone</td><td>${l.owner_phone || "—"}</td>
+                <td class="lbl">Owner Email</td><td>${l.owner_email || "—"}</td></tr>
+            <tr><td class="lbl">Contractor</td><td>${l.contractor_name || "—"}</td>
+                <td class="lbl">Contractor Ph</td><td>${l.contractor_phone || "—"}</td></tr>
+            <tr><td class="lbl">Permit #</td><td>${l.permit_number || "—"}</td>
+                <td class="lbl">Permit Date</td><td>${l.permit_date || "—"}</td></tr>
+            <tr><td class="lbl">Est. Value</td>
+                <td>${l.estimated_value ? "$"+Number(l.estimated_value).toLocaleString() : "—"}</td>
+                <td class="lbl">Category</td>
+                <td>${(l.lead_category||"").replace(/_/g," ")}</td></tr>
+          </table>
+          <div class="notes-label">Notes:</div>
+          <div class="notes">${l.notes || "(none)"}</div>
+        </div>`).join("");
+    }
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>KQF Discount Flooring — ${option.label}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#111;}
+  h1{font-size:16px;color:#1e3a5f;margin-bottom:4px;}
+  .meta{color:#666;margin-bottom:16px;font-size:10px;}
+  .card{border:1px solid #ccc;border-radius:6px;padding:12px;margin-bottom:14px;page-break-inside:avoid;}
+  .card-header{background:#1e3a5f;color:#f4a826;padding:6px 10px;border-radius:4px;margin-bottom:10px;font-size:12px;}
+  .status{font-weight:bold;color:#2ECC71;}
+  table{width:100%;border-collapse:collapse;margin-bottom:6px;}
+  td{padding:3px 6px;font-size:10px;}
+  .lbl{color:#666;font-weight:bold;width:100px;}
+  .notes-label{font-size:9px;font-weight:bold;color:#666;text-transform:uppercase;margin-top:6px;}
+  .notes{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px;font-size:10px;margin-top:2px;white-space:pre-wrap;}
+  @media print{.card{page-break-inside:avoid;}}
+</style></head>
+<body>
+<h1>KQF Discount Flooring — ${option.label}</h1>
+<div class="meta">Printed: ${now} &nbsp;|&nbsp; ${data.length} record(s)</div>
+${rows}
+<script>window.onload=function(){window.print();}</script>
+</body></html>`;
+
+    const blob = new Blob([html], {type:"text/html"});
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  };
+
+  const modalStyle = {
+    position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+    zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16
+  };
+  const boxStyle = {
+    background:"#fff",borderRadius:12,width:"100%",maxWidth:500,
+    border:"1px solid #e2e8f0",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"
+  };
+
+  return (
+    <div style={modalStyle} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={boxStyle}>
+        <div style={{background:"#f1f5f9",padding:"14px 20px",
+          borderRadius:"12px 12px 0 0",
+          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:"#1e3a5f",fontWeight:"bold",fontSize:16}}>Print Reports</span>
+          <button onClick={onClose} style={{background:"none",border:"none",
+            color:"#64748b",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{padding:20}}>
+          {loading && <div style={{color:"#64748b",textAlign:"center",padding:20}}>Loading follow-up data...</div>}
+          {!loading && (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{color:"#64748b",fontSize:12,marginBottom:4,fontWeight:"bold",
+                textTransform:"uppercase",letterSpacing:"0.05em"}}>Follow-Up Reports</div>
+              {reportOptions.slice(0,5).map(opt=>(
+                <button key={opt.id} onClick={()=>printReport(opt)} style={{
+                  background:"#f1f5f9",color:"#1e3a5f",border:"1px solid #e2e8f0",
+                  borderRadius:8,padding:"10px 16px",cursor:"pointer",
+                  textAlign:"left",fontSize:13,fontWeight:"500"
+                }}>{opt.label}</button>
+              ))}
+              <div style={{color:"#64748b",fontSize:12,marginTop:8,marginBottom:4,fontWeight:"bold",
+                textTransform:"uppercase",letterSpacing:"0.05em"}}>Leads by Status</div>
+              {reportOptions.slice(5).map(opt=>(
+                <button key={opt.id} onClick={()=>printReport(opt)} style={{
+                  background:"#f1f5f9",color:"#1e3a5f",border:"1px solid #e2e8f0",
+                  borderRadius:8,padding:"10px 16px",cursor:"pointer",
+                  textAlign:"left",fontSize:13,fontWeight:"500"
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Prospect Modal ───────────────────────────────────────────────────────
+function AddProspectModal({ onClose, onAdd }) {
+  const RTDB = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
+  const [saving, setSaving] = useState(false);
+  const [fields, setFields] = useState({
+    owner_name:"", owner_mailing_address:"", city:"", state:"NC", zip:"",
+    owner_phone:"", owner_email:"",
+    contractor_name:"", contractor_phone:"", contractor_email:"",
+    contractor_address:"", property_address:"", county:"",
+    notes:"", lead_category:"manual_entry", status:"New", lead_score:5
+  });
+
+  const save = async () => {
+    if (!fields.owner_name && !fields.contractor_name && !fields.property_address) {
+      alert("Please enter at least a name or address.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const entry = {
+        ...fields,
+        date_added: new Date().toISOString(),
+        source_name: "Manual Entry",
+      };
+      const resp = await fetch(`${RTDB}/leads.json`, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(entry)
+      });
+      const data = await resp.json();
+      onAdd({ id: data.name, ...entry });
+    } catch(e) { console.error(e); alert("Error saving. Please try again."); }
+    setSaving(false);
+  };
+
+  const inp = {
+    width:"100%",padding:"7px 10px",background:"#f8fafc",
+    border:"1.5px solid #e2e8f0",borderRadius:6,
+    color:"#1e293b",fontSize:13,outline:"none",boxSizing:"border-box"
+  };
+  const lbl = {
+    fontSize:11,color:"#64748b",fontWeight:"bold",
+    textTransform:"uppercase",letterSpacing:"0.05em",
+    display:"block",marginBottom:3
+  };
+  const fld = (label, key, opts={}) => (
+    <div style={{marginBottom:10,...(opts.style||{})}}>
+      <label style={lbl}>{label}</label>
+      <input style={inp} value={fields[key]}
+        onChange={e=>setFields(f=>({...f,[key]:e.target.value}))} />
+    </div>
+  );
+
+  return (
+    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{
+      position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
+      zIndex:2000,display:"flex",alignItems:"center",
+      justifyContent:"center",padding:16
+    }}>
+      <div style={{
+        background:"#fff",borderRadius:12,width:"100%",maxWidth:700,
+        maxHeight:"90vh",display:"flex",flexDirection:"column",
+        border:"1px solid #e2e8f0",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"
+      }}>
+        <div style={{background:"#f1f5f9",padding:"14px 20px",
+          borderRadius:"12px 12px 0 0",
+          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{color:"#1e3a5f",fontWeight:"bold",fontSize:16}}>Add New Prospect</span>
+          <button onClick={onClose} style={{background:"none",border:"none",
+            color:"#64748b",fontSize:22,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:20}}>
+          <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
+            textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            {fld("Owner Name","owner_name")}
+            {fld("Phone Number","owner_phone")}
+            {fld("Email Address","owner_email")}
+            {fld("Property Address","property_address")}
+            {fld("Mailing Address","owner_mailing_address")}
+            {fld("City","city")}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {fld("State","state")}
+              {fld("Zip","zip")}
+            </div>
+            {fld("County","county")}
+          </div>
+          <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
+            textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
+            {fld("Contractor Name","contractor_name")}
+            {fld("Phone Number","contractor_phone")}
+            {fld("Email Address","contractor_email")}
+            {fld("Business Address","contractor_address")}
+          </div>
+          <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
+            textTransform:"uppercase",margin:"14px 0 12px"}}>Notes</div>
+          <textarea value={fields.notes} onChange={e=>setFields(f=>({...f,notes:e.target.value}))}
+            placeholder="Any notes about this prospect..."
+            style={{...inp,height:100,resize:"vertical",fontFamily:"inherit",width:"100%",boxSizing:"border-box"}} />
+        </div>
+        <div style={{padding:"12px 20px",borderTop:"1px solid #e2e8f0",
+          display:"flex",gap:10}}>
+          <button onClick={save} disabled={saving} style={{
+            background:"#1e3a5f",color:"#fff",border:"none",
+            borderRadius:8,padding:"9px 28px",fontWeight:"bold",
+            cursor:"pointer",fontSize:14
+          }}>{saving?"Saving...":"Save Prospect"}</button>
+          <button onClick={onClose} style={{
+            background:"#e2e8f0",color:"#475569",border:"none",
+            borderRadius:8,padding:"9px 20px",cursor:"pointer",fontSize:14
+          }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Lead Popup Modal ─────────────────────────────────────────────────────────
 function LeadModal({ lead, onClose, onSave, onDelete }) {
   const [tab, setTab] = useState("info");
@@ -407,11 +737,16 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
                     }}>Pick Date</button>
                   </div>
                   {showCal && (
-                    <CalendarPicker
-                      value={fuDate}
-                      onChange={v=>{setFuDate(v);setShowCal(false);}}
-                      onClose={()=>setShowCal(false)}
-                    />
+                    <>
+                      <div onClick={()=>setShowCal(false)} style={{
+                        position:"fixed",inset:0,zIndex:9998
+                      }}/>
+                      <CalendarPicker
+                        value={fuDate}
+                        onChange={v=>{setFuDate(v);setShowCal(false);}}
+                        onClose={()=>setShowCal(false)}
+                      />
+                    </>
                   )}
                 </div>
                 {/* Time */}
@@ -543,6 +878,8 @@ function Dashboard({ user }) {
   const [filterStatus, setFilterStatus] = useState("All");
   const [selectedLead, setSelectedLead] = useState(null);
   const [counties, setCounties] = useState([]);
+  const [showReports, setShowReports] = useState(false);
+  const [showAddProspect, setShowAddProspect] = useState(false);
 
   useEffect(() => { fetchLeads(); }, []);
 
@@ -595,7 +932,7 @@ function Dashboard({ user }) {
     <div className="dashboard">
       <header className="header">
         <div className="header-left">
-          <h1>Nigga's Discount Flooring</h1>
+          <h1>KQF Discount Flooring</h1>
           <span className="header-subtitle">Lead Management</span>
         </div>
         <div className="header-right">
@@ -636,6 +973,16 @@ function Dashboard({ user }) {
           {STATUS_OPTIONS.map(s=><option key={s}>{s}</option>)}
         </select>
         <button className="refresh-btn" onClick={fetchLeads}>Refresh</button>
+        <button onClick={()=>setShowReports(true)} style={{
+          padding:"6px 14px",background:"#1e3a5f",color:"#fff",
+          border:"none",borderRadius:8,cursor:"pointer",
+          fontWeight:"bold",fontSize:13
+        }}>Reports</button>
+        <button onClick={()=>setShowAddProspect(true)} style={{
+          padding:"6px 14px",background:"#2ECC71",color:"#000",
+          border:"none",borderRadius:8,cursor:"pointer",
+          fontWeight:"bold",fontSize:13
+        }}>+ Add Prospect</button>
       </div>
 
       <div className="content">
@@ -673,6 +1020,23 @@ function Dashboard({ user }) {
           Click any lead to view details, edit info, schedule follow-ups, and map addresses.
         </div>
       </div>
+
+      {showReports && (
+        <ReportsModal
+          leads={leads}
+          onClose={()=>setShowReports(false)}
+        />
+      )}
+
+      {showAddProspect && (
+        <AddProspectModal
+          onClose={()=>setShowAddProspect(false)}
+          onAdd={(newLead)=>{
+            setLeads(prev=>[newLead,...prev]);
+            setShowAddProspect(false);
+          }}
+        />
+      )}
 
       {selectedLead && (
         <LeadModal
