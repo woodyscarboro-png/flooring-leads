@@ -389,33 +389,105 @@ function AddProspectModal({ onClose, onAdd }) {
         <div style={{flex:1,overflowY:"auto",padding:20}}>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
-          <div style={{display:"flex",flexDirection:"column",gap:2}}>
-            {fld("Owner Name","owner_name")}
-            {fld("Mailing Address","owner_mailing_address")}
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px"}}>
-              {fld("City","city")}
-              {fld("State","state")}
-              {fld("Zip","zip")}
+          <div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Owner Name</label>
+              <input style={inp} value={fields.owner_name}
+                onChange={e=>setFields(f=>({...f,owner_name:e.target.value}))} />
             </div>
-            {fld("Phone Number","owner_phone")}
-            {fld("Email Address","owner_email")}
-            {fld("Fax","owner_fax")}
-            {fld("Property Address","property_address")}
-            {fld("County","county")}
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Mailing Address</label>
+              <input style={inp} value={fields.owner_mailing_address}
+                onChange={e=>setFields(f=>({...f,owner_mailing_address:e.target.value}))} />
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px",marginBottom:10}}>
+              <div>
+                <label style={lbl}>City</label>
+                <input style={inp} value={fields.city}
+                  onChange={e=>setFields(f=>({...f,city:e.target.value}))} />
+              </div>
+              <div>
+                <label style={lbl}>State</label>
+                <input style={inp} value={fields.state}
+                  onChange={e=>setFields(f=>({...f,state:e.target.value}))} />
+              </div>
+              <div>
+                <label style={lbl}>Zip</label>
+                <input style={inp} value={fields.zip}
+                  onChange={e=>setFields(f=>({...f,zip:e.target.value}))} />
+              </div>
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Phone Number</label>
+              <input style={inp} value={fields.owner_phone}
+                onChange={e=>setFields(f=>({...f,owner_phone:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Email Address</label>
+              <input style={inp} value={fields.owner_email}
+                onChange={e=>setFields(f=>({...f,owner_email:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Fax</label>
+              <input style={inp} value={fields.owner_fax}
+                onChange={e=>setFields(f=>({...f,owner_fax:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Property Address</label>
+              <input style={inp} value={fields.property_address}
+                onChange={e=>setFields(f=>({...f,property_address:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>County</label>
+              <input style={inp} value={fields.county||""}
+                onChange={e=>setFields(f=>({...f,county:e.target.value}))} />
+            </div>
           </div>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
-          <div style={{display:"flex",flexDirection:"column",gap:2}}>
-            {fld("Contractor Name","contractor_name")}
-            {fld("Business Address","contractor_address")}
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px"}}>
-              {fld("City","contractor_city")}
-              {fld("State","contractor_state")}
-              {fld("Zip","contractor_zip")}
+          <div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Contractor Name</label>
+              <input style={inp} value={fields.contractor_name}
+                onChange={e=>setFields(f=>({...f,contractor_name:e.target.value}))} />
             </div>
-            {fld("Phone Number","contractor_phone")}
-            {fld("Email Address","contractor_email")}
-            {fld("Fax","contractor_fax")}
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Business Address</label>
+              <input style={inp} value={fields.contractor_address}
+                onChange={e=>setFields(f=>({...f,contractor_address:e.target.value}))} />
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px",marginBottom:10}}>
+              <div>
+                <label style={lbl}>City</label>
+                <input style={inp} value={fields.contractor_city}
+                  onChange={e=>setFields(f=>({...f,contractor_city:e.target.value}))} />
+              </div>
+              <div>
+                <label style={lbl}>State</label>
+                <input style={inp} value={fields.contractor_state}
+                  onChange={e=>setFields(f=>({...f,contractor_state:e.target.value}))} />
+              </div>
+              <div>
+                <label style={lbl}>Zip</label>
+                <input style={inp} value={fields.contractor_zip}
+                  onChange={e=>setFields(f=>({...f,contractor_zip:e.target.value}))} />
+              </div>
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Phone Number</label>
+              <input style={inp} value={fields.contractor_phone}
+                onChange={e=>setFields(f=>({...f,contractor_phone:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Email Address</label>
+              <input style={inp} value={fields.contractor_email}
+                onChange={e=>setFields(f=>({...f,contractor_email:e.target.value}))} />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={lbl}>Fax</label>
+              <input style={inp} value={fields.contractor_fax}
+                onChange={e=>setFields(f=>({...f,contractor_fax:e.target.value}))} />
+            </div>
           </div>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",margin:"14px 0 12px"}}>Notes</div>
