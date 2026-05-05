@@ -102,7 +102,7 @@ const nb = {
 };
 
 // ─── Lead Popup Modal ─────────────────────────────────────────────────────────
-function LeadModal({ lead, onClose, onSave }) {
+function LeadModal({ lead, onClose, onSave, onDelete }) {
   const [tab, setTab] = useState("info");
   const [fields, setFields] = useState({
     owner_name:            lead.owner_name || "",
@@ -122,6 +122,19 @@ function LeadModal({ lead, onClose, onSave }) {
   const [status, setStatus] = useState(lead.status || "New");
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deleteLead = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    try {
+      await fetch(`${RTDB_URL}/leads/${lead.id}.json`, { method: "DELETE" });
+      onDelete(lead.id);
+      onClose();
+    } catch(e) { console.error(e); }
+  };
 
   // Follow-up state
   const [fuDate, setFuDate] = useState("");
@@ -261,10 +274,34 @@ function LeadModal({ lead, onClose, onSave }) {
               {lead.property_address} &nbsp;|&nbsp; {lead.county} County &nbsp;|&nbsp; Score: {lead.lead_score}/10
             </div>
           </div>
-          <button onClick={onClose} style={{
-            background:"none",border:"none",color:"#64748b",
-            fontSize:22,cursor:"pointer",padding:"0 4px"
-          }}>✕</button>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {confirmDelete ? (
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:12,color:"#dc2626",fontWeight:"bold"}}>
+                  Are you sure? This cannot be undone.
+                </span>
+                <button onClick={deleteLead} style={{
+                  background:"#dc2626",color:"#fff",border:"none",
+                  borderRadius:6,padding:"4px 12px",cursor:"pointer",
+                  fontWeight:"bold",fontSize:12
+                }}>Yes, Delete</button>
+                <button onClick={()=>setConfirmDelete(false)} style={{
+                  background:"#e2e8f0",color:"#475569",border:"none",
+                  borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:12
+                }}>Cancel</button>
+              </div>
+            ) : (
+              <button onClick={deleteLead} style={{
+                background:"none",border:"1px solid #dc2626",color:"#dc2626",
+                borderRadius:6,padding:"4px 12px",cursor:"pointer",
+                fontSize:12,fontWeight:"bold"
+              }}>Delete Lead</button>
+            )}
+            <button onClick={onClose} style={{
+              background:"none",border:"none",color:"#64748b",
+              fontSize:22,cursor:"pointer",padding:"0 4px"
+            }}>✕</button>
+          </div>
         </div>
 
         {/* Tab bar + status */}
@@ -642,6 +679,10 @@ function Dashboard({ user }) {
           lead={selectedLead}
           onClose={()=>setSelectedLead(null)}
           onSave={handleSave}
+          onDelete={(id)=>{
+            setLeads(prev=>prev.filter(l=>l.id!==id));
+            setSelectedLead(null);
+          }}
         />
       )}
     </div>
