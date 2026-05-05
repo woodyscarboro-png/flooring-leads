@@ -319,9 +319,11 @@ function AddProspectModal({ onClose, onAdd }) {
   const [saving, setSaving] = useState(false);
   const [fields, setFields] = useState({
     owner_name:"", owner_mailing_address:"", city:"", state:"NC", zip:"",
-    owner_phone:"", owner_email:"",
-    contractor_name:"", contractor_phone:"", contractor_email:"",
-    contractor_address:"", property_address:"", county:"",
+    owner_phone:"", owner_email:"", owner_fax:"",
+    contractor_name:"", contractor_address:"", contractor_city:"",
+    contractor_state:"NC", contractor_zip:"",
+    contractor_phone:"", contractor_email:"", contractor_fax:"",
+    property_address:"", county:"",
     notes:"", lead_category:"manual_entry", status:"New", lead_score:5
   });
 
@@ -389,24 +391,27 @@ function AddProspectModal({ onClose, onAdd }) {
             textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
             {fld("Owner Name","owner_name")}
-            {fld("Phone Number","owner_phone")}
-            {fld("Email Address","owner_email")}
-            {fld("Property Address","property_address")}
             {fld("Mailing Address","owner_mailing_address")}
             {fld("City","city")}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {fld("State","state")}
-              {fld("Zip","zip")}
-            </div>
+            {fld("State","state")}
+            {fld("Zip","zip")}
+            {fld("Phone Number","owner_phone")}
+            {fld("Email Address","owner_email")}
+            {fld("Fax","owner_fax")}
+            {fld("Property Address","property_address")}
             {fld("County","county")}
           </div>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
             {fld("Contractor Name","contractor_name")}
+            {fld("Business Address","contractor_address")}
+            {fld("City","contractor_city")}
+            {fld("State","contractor_state")}
+            {fld("Zip","contractor_zip")}
             {fld("Phone Number","contractor_phone")}
             {fld("Email Address","contractor_email")}
-            {fld("Business Address","contractor_address")}
+            {fld("Fax","contractor_fax")}
           </div>
           <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
             textTransform:"uppercase",margin:"14px 0 12px"}}>Notes</div>
@@ -442,10 +447,15 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
     zip:                   lead.zip || "",
     owner_phone:           lead.owner_phone || lead.property_manager_phone || "",
     owner_email:           lead.owner_email || lead.property_manager_email || "",
+    owner_fax:             lead.owner_fax || "",
     contractor_name:       lead.contractor_name || "",
+    contractor_address:    lead.contractor_address || "",
+    contractor_city:       lead.contractor_city || "",
+    contractor_state:      lead.contractor_state || "NC",
+    contractor_zip:        lead.contractor_zip || "",
     contractor_phone:      lead.contractor_phone || "",
     contractor_email:      lead.contractor_email || "",
-    contractor_address:    lead.contractor_address || "",
+    contractor_fax:        lead.contractor_fax || "",
     property_address:      lead.property_address || "",
   });
   const [notes, setNotes] = useState(lead.notes || "");
