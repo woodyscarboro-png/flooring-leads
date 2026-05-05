@@ -53,14 +53,14 @@ function CalendarPicker({ value, onChange, onClose }) {
   return (
     <div style={{
       position:"absolute", zIndex:9999, top:"100%", left:0,
-      background:"#162330", border:"1px solid #1E3448",
+      background:"#ffffff", border:"1px solid #e2e8f0",
       borderRadius:10, padding:12, width:280,
       boxShadow:"0 8px 32px rgba(0,0,0,0.6)"
     }}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
         <button onClick={()=>setYr(y=>y-1)} style={nb}>{"<<"}</button>
         <button onClick={prevMonth} style={nb}>{"<"}</button>
-        <span style={{color:"#F4A826",fontWeight:"bold",fontSize:13}}>
+        <span style={{color:"#1e3a5f",fontWeight:"bold",fontSize:13}}>
           {MONTHS[mo]} {yr}
         </span>
         <button onClick={nextMonth} style={nb}>{">"}</button>
@@ -68,7 +68,7 @@ function CalendarPicker({ value, onChange, onClose }) {
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
         {DOW.map(d=>(
-          <div key={d} style={{textAlign:"center",fontSize:10,color:"#7A90A4",fontWeight:"bold"}}>{d}</div>
+          <div key={d} style={{textAlign:"center",fontSize:10,color:"#64748b",fontWeight:"bold"}}>{d}</div>
         ))}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
@@ -80,8 +80,8 @@ function CalendarPicker({ value, onChange, onClose }) {
           const isTod = thisD.getTime() === today.getTime();
           return (
             <button key={i} onClick={()=>pick(day)} style={{
-              background: isSel?"#F4A826":isTod?"#2ECC71":"#1A3A52",
-              color: (isSel||isTod)?"#000":"#E8EDF2",
+              background: isSel?"#1e3a5f":isTod?"#2ECC71":"#f1f5f9",
+              color: (isSel||isTod)?"#fff":"#1e293b",
               border:"none", borderRadius:4, padding:"5px 0",
               cursor:"pointer", fontSize:12,
               fontWeight: isSel?"bold":"normal"
@@ -97,7 +97,7 @@ function CalendarPicker({ value, onChange, onClose }) {
 }
 
 const nb = {
-  background:"#1A3A52",color:"#E8EDF2",border:"none",
+  background:"#e2e8f0",color:"#475569",border:"none",
   borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:12
 };
 
@@ -209,20 +209,20 @@ function LeadModal({ lead, onClose, onSave }) {
   };
 
   const inp = {
-    width:"100%",padding:"7px 10px",background:"#162330",
-    border:"1.5px solid #1E3448",borderRadius:6,
-    color:"#E8EDF2",fontSize:13,outline:"none",boxSizing:"border-box"
+    width:"100%",padding:"7px 10px",background:"#f8fafc",
+    border:"1.5px solid #e2e8f0",borderRadius:6,
+    color:"#1e293b",fontSize:13,outline:"none",boxSizing:"border-box"
   };
   const lbl = {
-    fontSize:11,color:"#7A90A4",fontWeight:"bold",
+    fontSize:11,color:"#64748b",fontWeight:"bold",
     textTransform:"uppercase",letterSpacing:"0.05em",
     display:"block",marginBottom:3
   };
   const tabBtn = (t,label) => (
     <button key={t} onClick={()=>setTab(t)} style={{
       padding:"8px 18px",cursor:"pointer",border:"none",
-      background:tab===t?"#F4A826":"#1A3A52",
-      color:tab===t?"#000":"#E8EDF2",
+      background:tab===t?"#1e3a5f":"#e2e8f0",
+      color:tab===t?"#fff":"#475569",
       fontWeight:tab===t?"bold":"normal",
       fontSize:13,borderRadius:"6px 6px 0 0",marginRight:4
     }}>{label}</button>
@@ -243,34 +243,34 @@ function LeadModal({ lead, onClose, onSave }) {
       justifyContent:"center",padding:16
     }}>
       <div style={{
-        background:"#0F1923",borderRadius:12,width:"100%",maxWidth:800,
+        background:"#ffffff",borderRadius:12,width:"100%",maxWidth:800,
         maxHeight:"92vh",display:"flex",flexDirection:"column",
-        border:"1px solid #1E3448",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"
+        border:"1px solid #e2e8f0",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"
       }}>
         {/* Header */}
         <div style={{
-          background:"#0D1820",padding:"14px 20px",
+          background:"#f1f5f9",padding:"14px 20px",
           borderRadius:"12px 12px 0 0",
           display:"flex",alignItems:"center",justifyContent:"space-between"
         }}>
           <div>
-            <div style={{color:"#F4A826",fontWeight:"bold",fontSize:16}}>
+            <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:16}}>
               {lead.owner_name || lead.contractor_name || "Unknown"}
             </div>
-            <div style={{color:"#7A90A4",fontSize:12,marginTop:2}}>
+            <div style={{color:"#64748b",fontSize:12,marginTop:2}}>
               {lead.property_address} &nbsp;|&nbsp; {lead.county} County &nbsp;|&nbsp; Score: {lead.lead_score}/10
             </div>
           </div>
           <button onClick={onClose} style={{
-            background:"none",border:"none",color:"#7A90A4",
+            background:"none",border:"none",color:"#64748b",
             fontSize:22,cursor:"pointer",padding:"0 4px"
           }}>✕</button>
         </div>
 
         {/* Tab bar + status */}
         <div style={{
-          padding:"10px 16px 0",background:"#0D1820",
-          borderBottom:"1px solid #1E3448",
+          padding:"10px 16px 0",background:"#f1f5f9",
+          borderBottom:"1px solid #e2e8f0",
           display:"flex",alignItems:"center",flexWrap:"wrap",gap:4
         }}>
           {[["info","Edit Info"],["notes","Notes"],["followup","Follow-Ups"],["map","Map"]].map(([t,l])=>tabBtn(t,l))}
@@ -287,12 +287,12 @@ function LeadModal({ lead, onClose, onSave }) {
         </div>
 
         {/* Body */}
-        <div style={{flex:1,overflowY:"auto",padding:20}}>
+        <div style={{flex:1,overflowY:"auto",padding:20,background:"#ffffff"}}>
 
           {/* INFO TAB */}
           {tab==="info" && (
             <div>
-              <div style={{color:"#F4A826",fontWeight:"bold",fontSize:11,
+              <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
                 {fld("Owner Name","owner_name")}
@@ -305,7 +305,7 @@ function LeadModal({ lead, onClose, onSave }) {
                   {fld("Zip","zip")}
                 </div>
               </div>
-              <div style={{color:"#F4A826",fontWeight:"bold",fontSize:11,
+              <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
                 {fld("Contractor Name","contractor_name")}
@@ -327,9 +327,9 @@ function LeadModal({ lead, onClose, onSave }) {
             <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
               <div style={{display:"flex",justifyContent:"space-between",
                 alignItems:"center",marginBottom:10}}>
-                <span style={{color:"#7A90A4",fontSize:12}}>Timestamped running notes log</span>
+                <span style={{color:"#64748b",fontSize:12}}>Timestamped running notes log</span>
                 <button onClick={addTS} style={{
-                  background:"#1A3A52",color:"#E8EDF2",border:"none",
+                  background:"#e2e8f0",color:"#475569",border:"none",
                   borderRadius:6,padding:"6px 14px",cursor:"pointer",fontSize:12
                 }}>+ Add Timestamp</button>
               </div>
@@ -406,7 +406,7 @@ function LeadModal({ lead, onClose, onSave }) {
               <div style={{marginBottom:12}}>
                 <label style={lbl}>Notes for this Follow-Up</label>
                 <textarea value={fuNotes} onChange={e=>setFuNotes(e.target.value)}
-                  style={{...inp,height:90,resize:"vertical",fontFamily:"inherit"}}
+                  style={{...inp,height:90,resize:"vertical",fontFamily:"inherit",background:"#f8fafc",color:"#1e293b"}}
                   placeholder="What to discuss, what was said..." />
               </div>
               <button onClick={saveFu} style={{
@@ -415,24 +415,24 @@ function LeadModal({ lead, onClose, onSave }) {
                 cursor:"pointer",fontSize:14,marginBottom:20
               }}>Save Follow-Up</button>
 
-              <div style={{color:"#F4A826",fontWeight:"bold",fontSize:11,
+              <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",marginBottom:10}}>Follow-Up History</div>
               {loadingFu && <div style={{color:"#7A90A4"}}>Loading...</div>}
               {!loadingFu && followups.length===0 && (
-                <div style={{color:"#7A90A4",fontSize:13}}>No follow-ups yet.</div>
+                <div style={{color:"#64748b",fontSize:13}}>No follow-ups yet.</div>
               )}
               {followups.map(f=>(
                 <div key={f.id} style={{
-                  background:"#162330",borderRadius:8,padding:12,
-                  marginBottom:8,border:"1px solid #1E3448"
+                  background:"#f8fafc",borderRadius:8,padding:12,
+                  marginBottom:8,border:"1px solid #e2e8f0"
                 }}>
                   <div style={{display:"flex",justifyContent:"space-between",
                     alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:6}}>
                     <div>
-                      <span style={{color:"#F4A826",fontWeight:"bold",fontSize:13}}>
+                      <span style={{color:"#1e3a5f",fontWeight:"bold",fontSize:13}}>
                         {f.date} at {f.time}
                       </span>
-                      <span style={{color:"#7A90A4",fontSize:12,marginLeft:10}}>{f.type}</span>
+                      <span style={{color:"#64748b",fontSize:12,marginLeft:10}}>{f.type}</span>
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                       <span style={{
@@ -442,7 +442,7 @@ function LeadModal({ lead, onClose, onSave }) {
                       }}>{f.status}</span>
                       {["Completed","Cancelled","No Answer"].map(s=>(
                         <button key={s} onClick={()=>updateFuStatus(f.id,s)} style={{
-                          background:"#1A3A52",color:"#E8EDF2",border:"none",
+                          background:"#e2e8f0",color:"#475569",border:"none",
                           borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10
                         }}>{s}</button>
                       ))}
@@ -452,7 +452,7 @@ function LeadModal({ lead, onClose, onSave }) {
                       }}>✕</button>
                     </div>
                   </div>
-                  {f.notes && <div style={{color:"#E8EDF2",fontSize:12,marginTop:4}}>{f.notes}</div>}
+                  {f.notes && <div style={{color:"#1e293b",fontSize:12,marginTop:4}}>{f.notes}</div>}
                 </div>
               ))}
             </div>
@@ -471,13 +471,13 @@ function LeadModal({ lead, onClose, onSave }) {
                 ["Contractor Business Address", fields.contractor_address],
               ].filter(([,addr])=>addr&&addr.trim()).map(([label,addr])=>(
                 <div key={label} style={{
-                  background:"#162330",borderRadius:8,padding:14,
-                  marginBottom:12,border:"1px solid #1E3448",
+                  background:"#f8fafc",borderRadius:8,padding:14,
+                  marginBottom:12,border:"1px solid #e2e8f0",
                   display:"flex",justifyContent:"space-between",alignItems:"center"
                 }}>
                   <div>
-                    <div style={{color:"#7A90A4",fontSize:11,marginBottom:4}}>{label}</div>
-                    <div style={{color:"#E8EDF2",fontSize:13}}>{addr}</div>
+                    <div style={{color:"#64748b",fontSize:11,marginBottom:4}}>{label}</div>
+                    <div style={{color:"#1e293b",fontSize:13}}>{addr}</div>
                   </div>
                   <button onClick={()=>mapIt(addr)} style={{
                     background:"#F4A826",color:"#000",border:"none",
