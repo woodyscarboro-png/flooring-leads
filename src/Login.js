@@ -24,7 +24,7 @@ function Login() {
     <div className="login-container">
       <div className="login-box">
         <div className="login-logo">
-          <h1>KCM Quality Flooring</h1>
+          <h1>KQF Discount Flooring</h1>
           <p>Lead Management System</p>
         </div>
         <form onSubmit={handleLogin}>
