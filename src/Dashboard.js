@@ -360,14 +360,6 @@ function AddProspectModal({ onClose, onAdd }) {
     textTransform:"uppercase",letterSpacing:"0.05em",
     display:"block",marginBottom:3
   };
-  // eslint-disable-next-line no-unused-vars
-  const fld = (label, key, opts={}) => (
-    <div style={{marginBottom:10,...(opts.style||{})}}>
-      <label style={lbl}>{label}</label>
-      <input style={inp} value={fields[key]}
-        onChange={e=>setFields(f=>({...f,[key]:e.target.value}))} />
-    </div>
-  );
 
   return (
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{
@@ -534,6 +526,7 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
     contractor_email:      lead.contractor_email || "",
     contractor_fax:        lead.contractor_fax || "",
     property_address:      lead.property_address || "",
+    county:                lead.county || "",
   });
   const [notes, setNotes] = useState(lead.notes || "");
   const [status, setStatus] = useState(lead.status || "New");
@@ -658,8 +651,8 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
     }}>{label}</button>
   );
 
-  const fld = (label, key, opts={}) => (
-    <div style={{marginBottom:10,...(opts.style||{})}}>
+  const fld = (label, key) => (
+    <div style={{marginBottom:10}}>
       <label style={lbl}>{label}</label>
       <input style={inp} value={fields[key]}
         onChange={e=>setFields(f=>({...f,[key]:e.target.value}))} />
@@ -743,31 +736,69 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
         {/* Body */}
         <div style={{flex:1,overflowY:"auto",padding:20,background:"#ffffff"}}>
 
-          {/* INFO TAB */}
+          {/* INFO TAB — field order matches Add Prospect exactly */}
           {tab==="info" && (
             <div>
+              {/* ── Owner / Property Contact ── */}
               <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",marginBottom:12}}>Owner / Property Contact</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-                {fld("Owner Name","owner_name")}
-                {fld("Phone Number","owner_phone")}
-                {fld("Email Address","owner_email")}
-                {fld("Mailing Address","owner_mailing_address")}
-                {fld("City","city")}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  {fld("State","state")}
-                  {fld("Zip","zip")}
+
+              {fld("Owner Name","owner_name")}
+              {fld("Mailing Address","owner_mailing_address")}
+
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px",marginBottom:10}}>
+                <div>
+                  <label style={lbl}>City</label>
+                  <input style={inp} value={fields.city}
+                    onChange={e=>setFields(f=>({...f,city:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={lbl}>State</label>
+                  <input style={inp} value={fields.state}
+                    onChange={e=>setFields(f=>({...f,state:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={lbl}>Zip</label>
+                  <input style={inp} value={fields.zip}
+                    onChange={e=>setFields(f=>({...f,zip:e.target.value}))} />
                 </div>
               </div>
+
+              {fld("Phone Number","owner_phone")}
+              {fld("Email Address","owner_email")}
+              {fld("Fax","owner_fax")}
+              {fld("Property Address","property_address")}
+              {fld("County","county")}
+
+              {/* ── Contractor / Builder ── */}
               <div style={{color:"#1e3a5f",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",margin:"14px 0 12px"}}>Contractor / Builder</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}}>
-                {fld("Contractor Name","contractor_name")}
-                {fld("Phone Number","contractor_phone")}
-                {fld("Email Address","contractor_email")}
-                {fld("Business Address","contractor_address")}
-                {fld("Property Address","property_address")}
+
+              {fld("Contractor Name","contractor_name")}
+              {fld("Business Address","contractor_address")}
+
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"0 12px",marginBottom:10}}>
+                <div>
+                  <label style={lbl}>City</label>
+                  <input style={inp} value={fields.contractor_city}
+                    onChange={e=>setFields(f=>({...f,contractor_city:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={lbl}>State</label>
+                  <input style={inp} value={fields.contractor_state}
+                    onChange={e=>setFields(f=>({...f,contractor_state:e.target.value}))} />
+                </div>
+                <div>
+                  <label style={lbl}>Zip</label>
+                  <input style={inp} value={fields.contractor_zip}
+                    onChange={e=>setFields(f=>({...f,contractor_zip:e.target.value}))} />
+                </div>
               </div>
+
+              {fld("Phone Number","contractor_phone")}
+              {fld("Email Address","contractor_email")}
+              {fld("Fax","contractor_fax")}
+
               <button onClick={saveAll} disabled={saving} style={{
                 marginTop:8,background:savedOk?"#2ECC71":"#F4A826",
                 color:"#000",border:"none",borderRadius:8,
@@ -810,7 +841,6 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
               <div style={{color:"#F4A826",fontWeight:"bold",fontSize:11,
                 textTransform:"uppercase",marginBottom:12}}>Schedule a Follow-Up</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px",marginBottom:10}}>
-                {/* Date */}
                 <div style={{position:"relative"}}>
                   <label style={lbl}>Date</label>
                   <div style={{display:"flex",gap:8}}>
@@ -825,9 +855,7 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
                   </div>
                   {showCal && (
                     <>
-                      <div onClick={()=>setShowCal(false)} style={{
-                        position:"fixed",inset:0,zIndex:9998
-                      }}/>
+                      <div onClick={()=>setShowCal(false)} style={{position:"fixed",inset:0,zIndex:9998}}/>
                       <CalendarPicker
                         value={fuDate}
                         onChange={v=>{setFuDate(v);setShowCal(false);}}
@@ -836,7 +864,6 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
                     </>
                   )}
                 </div>
-                {/* Time */}
                 <div>
                   <label style={lbl}>Time</label>
                   <select value={fuTime} onChange={e=>setFuTime(e.target.value)} style={{...inp,cursor:"pointer"}}>
@@ -845,7 +872,6 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
                       .map(t=><option key={t}>{t}</option>)}
                   </select>
                 </div>
-                {/* Type */}
                 <div>
                   <label style={lbl}>Type</label>
                   <select value={fuType} onChange={e=>setFuType(e.target.value)} style={{...inp,cursor:"pointer"}}>
@@ -853,7 +879,6 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
                       .map(t=><option key={t}>{t}</option>)}
                   </select>
                 </div>
-                {/* Status */}
                 <div>
                   <label style={lbl}>Status</label>
                   <select value={fuStatus} onChange={e=>setFuStatus(e.target.value)} style={{...inp,cursor:"pointer"}}>
