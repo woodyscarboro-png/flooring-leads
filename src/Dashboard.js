@@ -103,7 +103,7 @@ const nb = {
 
 // ─── Reports Modal ───────────────────────────────────────────────────────────
 function ReportsModal({ leads, onClose }) {
-  const [reportType, setReportType] = useState(null);
+
   const [followups, setFollowups] = useState([]);
   const [loading, setLoading] = useState(false);
 
