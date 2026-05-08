@@ -657,16 +657,6 @@ function Dashboard({ user }) {
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
-  const updateStatus = async (leadId, newStatus) => {
-    try {
-      await fetch(`${RTDB_URL}/leads/${leadId}/status.json`, {
-        method:"PUT", body: JSON.stringify(newStatus),
-      });
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
-      if (selectedLead?.id === leadId) setSelectedLead(prev => ({ ...prev, status: newStatus }));
-    } catch (err) { console.error(err); }
-  };
-
   const handleSaveLead = (updated) => {
     setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
     setSelectedLead(updated);
