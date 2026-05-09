@@ -3,6 +3,7 @@ import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
 
 const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
+const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
 const STATUS_COLORS = {
   New: "#3b82f6",
@@ -44,7 +45,6 @@ function CalendarPicker({ value, onChange, onClose }) {
 
   const selectedStr = value;
   const todayStr = today.toISOString().split("T")[0];
-
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -94,7 +94,7 @@ const calNavBtn = {
 };
 
 // ── Lead Modal ─────────────────────────────────────────────────────────────────
-function LeadModal({ lead, onClose, onSave, onDelete }) {
+function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, hasNext }) {
   const [activeTab, setActiveTab] = useState("edit");
   const [form, setForm] = useState({
     owner_name: lead.owner_name || "",
@@ -122,6 +122,36 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
   const [showCal, setShowCal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  // Reset form when lead changes via prev/next
+  useEffect(() => {
+    setForm({
+      owner_name: lead.owner_name || "",
+      mailing_address: lead.mailing_address || "",
+      owner_city: lead.owner_city || "",
+      owner_state: lead.owner_state || "NC",
+      owner_zip: lead.owner_zip || "",
+      owner_phone: lead.owner_phone || "",
+      owner_email: lead.owner_email || "",
+      owner_fax: lead.owner_fax || "",
+      property_address: lead.property_address || "",
+      county: lead.county || "",
+      contractor_name: lead.contractor_name || "",
+      contractor_address: lead.contractor_address || "",
+      contractor_city: lead.contractor_city || "",
+      contractor_state: lead.contractor_state || "NC",
+      contractor_zip: lead.contractor_zip || "",
+      contractor_phone: lead.contractor_phone || lead.phone || "",
+      contractor_email: lead.contractor_email || "",
+      contractor_fax: lead.contractor_fax || "",
+    });
+    setNotes(lead.notes || "");
+    setFollowUps(lead.follow_ups || []);
+    setDeleteConfirm(false);
+    setLookupStatus("");
+  }, [lead]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -135,6 +165,53 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
       onSave(updated);
     } catch (e) { console.error(e); }
     setSaving(false);
+  };
+
+  // ── Google Places Phone & Email Lookup ─────────────────────────────────────
+  const findContactInfo = async () => {
+    const searchName = form.contractor_name || form.owner_name;
+    const searchAddr = form.contractor_address || form.property_address || form.mailing_address;
+    if (!searchName) {
+      setLookupStatus("⚠️ No business name found to search.");
+      return;
+    }
+    setLookupLoading(true);
+    setLookupStatus("🔍 Searching Google Places...");
+    try {
+      const query = `${searchName} ${searchAddr}`.trim();
+      const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query)}&inputtype=textquery&fields=name,formatted_phone_number,website&key=${PLACES_API_KEY}`;
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      const resp = await fetch(proxyUrl);
+      const data = await resp.json();
+      if (data.candidates && data.candidates.length > 0) {
+        const place = data.candidates[0];
+        let found = [];
+        if (place.formatted_phone_number) {
+          set("contractor_phone", place.formatted_phone_number);
+          found.push("phone ✓");
+        }
+        if (place.website) {
+          const domain = new URL(place.website).hostname.replace("www.", "");
+          if (found.length > 0) {
+            setLookupStatus(`✅ Found: ${found.join(", ")}! Website: ${domain} — check it manually for email. Click Save Changes to keep.`);
+          } else {
+            setLookupStatus(`⚠️ No phone listed. Website found: ${domain} — check it manually for contact info.`);
+          }
+        } else {
+          if (found.length > 0) {
+            setLookupStatus(`✅ Found: ${found.join(", ")}! Click Save Changes to keep.`);
+          } else {
+            setLookupStatus("⚠️ Business found but no phone or website listed in Google.");
+          }
+        }
+      } else {
+        setLookupStatus("⚠️ No matching business found in Google Places. Try editing the name or address.");
+      }
+    } catch (e) {
+      setLookupStatus("❌ Lookup failed. Check your internet connection.");
+      console.error(e);
+    }
+    setLookupLoading(false);
   };
 
   const addFollowUp = () => {
@@ -190,6 +267,7 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
         maxHeight:"90vh", display:"flex", flexDirection:"column", overflow:"hidden",
         boxShadow:"0 8px 32px rgba(0,0,0,0.2)"
       }}>
+
         {/* Header */}
         <div style={{
           padding:"14px 20px", borderBottom:"1px solid #eee",
@@ -299,6 +377,32 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
               <input style={inputStyle} value={form.contractor_email} onChange={e => set("contractor_email", e.target.value)} />
               <label style={labelStyle}>Fax</label>
               <input style={inputStyle} value={form.contractor_fax} onChange={e => set("contractor_fax", e.target.value)} />
+
+              {/* ── Find Phone & Email Button ── */}
+              <div style={{marginTop:16, padding:14, background:"#f0f9ff", borderRadius:8, border:"1px solid #bae6fd"}}>
+                <div style={{display:"flex", alignItems:"center", gap:10, flexWrap:"wrap"}}>
+                  <button
+                    onClick={findContactInfo}
+                    disabled={lookupLoading}
+                    style={{
+                      background: lookupLoading ? "#94a3b8" : "#0ea5e9",
+                      color:"#fff", border:"none", borderRadius:6,
+                      padding:"8px 16px", cursor: lookupLoading ? "not-allowed" : "pointer",
+                      fontSize:14, fontWeight:600, whiteSpace:"nowrap"
+                    }}
+                  >
+                    {lookupLoading ? "🔍 Searching..." : "🔍 Find Phone & Email"}
+                  </button>
+                  <span style={{fontSize:12, color:"#0369a1"}}>
+                    Searches Google Places using the business name &amp; address above
+                  </span>
+                </div>
+                {lookupStatus && (
+                  <div style={{marginTop:8, fontSize:13, color:"#0c4a6e", fontWeight:500}}>
+                    {lookupStatus}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -453,19 +557,46 @@ function LeadModal({ lead, onClose, onSave, onDelete }) {
           )}
         </div>
 
-        {/* Footer Save Button */}
+        {/* Footer — Prev/Next + Close/Save */}
         <div style={{
           padding:"12px 20px", borderTop:"1px solid #eee",
-          background:"#f8f9fa", display:"flex", justifyContent:"flex-end", gap:10
+          background:"#f8f9fa", display:"flex", justifyContent:"space-between", alignItems:"center"
         }}>
-          <button onClick={onClose} style={{
-            background:"#e5e7eb", color:"#333", border:"none",
-            borderRadius:5, padding:"8px 20px", cursor:"pointer", fontSize:14
-          }}>Close</button>
-          <button onClick={saveAll} disabled={saving} style={{
-            background:"#3b82f6", color:"#fff", border:"none",
-            borderRadius:5, padding:"8px 24px", cursor:"pointer", fontSize:14, fontWeight:600
-          }}>{saving ? "Saving..." : "Save Changes"}</button>
+          {/* Previous / Next Navigation */}
+          <div style={{display:"flex", gap:8}}>
+            <button
+              onClick={onPrev}
+              disabled={!hasPrev}
+              style={{
+                background: hasPrev ? "#3b82f6" : "#e5e7eb",
+                color: hasPrev ? "#fff" : "#aaa",
+                border:"none", borderRadius:5, padding:"8px 16px",
+                cursor: hasPrev ? "pointer" : "not-allowed", fontSize:14, fontWeight:600
+              }}
+            >← Previous</button>
+            <button
+              onClick={onNext}
+              disabled={!hasNext}
+              style={{
+                background: hasNext ? "#3b82f6" : "#e5e7eb",
+                color: hasNext ? "#fff" : "#aaa",
+                border:"none", borderRadius:5, padding:"8px 16px",
+                cursor: hasNext ? "pointer" : "not-allowed", fontSize:14, fontWeight:600
+              }}
+            >Next →</button>
+          </div>
+
+          {/* Close / Save */}
+          <div style={{display:"flex", gap:10}}>
+            <button onClick={onClose} style={{
+              background:"#e5e7eb", color:"#333", border:"none",
+              borderRadius:5, padding:"8px 20px", cursor:"pointer", fontSize:14
+            }}>Close</button>
+            <button onClick={saveAll} disabled={saving} style={{
+              background:"#3b82f6", color:"#fff", border:"none",
+              borderRadius:5, padding:"8px 24px", cursor:"pointer", fontSize:14, fontWeight:600
+            }}>{saving ? "Saving..." : "Save Changes"}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -545,7 +676,6 @@ function AddProspectModal({ onClose, onSave }) {
           <input style={inputStyle} value={form.property_address} onChange={e => set("property_address", e.target.value)} />
           <label style={labelStyle}>County</label>
           <input style={inputStyle} value={form.county} onChange={e => set("county", e.target.value)} />
-
           <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>
             Contractor
           </h4>
@@ -609,11 +739,14 @@ function printReport(title, leads, followUps) {
     th{background:#3b82f6;color:#fff;padding:6px 8px;text-align:left;}
     td{padding:5px 8px;border-bottom:1px solid #eee;}
     tr:nth-child(even){background:#f9f9f9;}
-    @media print{button{display:none;}}
+    .close-btn{position:fixed;top:16px;right:20px;background:#ef4444;color:#fff;border:none;
+      border-radius:6px;padding:8px 18px;font-size:14px;cursor:pointer;font-weight:600;z-index:999;}
+    @media print{.close-btn{display:none;} .print-btn{display:none;}}
   </style></head><body>
+  <button class="close-btn" onclick="window.close()">✕ Close</button>
   <h1>KQF Discount Flooring — ${title}</h1>
   <h2>Generated: ${new Date().toLocaleString()}</h2>
-  <button onclick="window.print()" style="margin-bottom:12px;padding:6px 16px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;">Print</button>
+  <button class="print-btn" onclick="window.print()" style="margin-bottom:12px;padding:6px 16px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;">🖨 Print</button>
   <table><thead><tr>
     <th>Date/Time</th><th>Type</th><th>Status</th>
     <th>Name</th><th>Address</th><th>Phone</th><th>Notes</th>
@@ -632,7 +765,7 @@ function Dashboard({ user }) {
   const [search, setSearch] = useState("");
   const [filterCounty, setFilterCounty] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
-  const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedLeadIndex, setSelectedLeadIndex] = useState(null);
   const [showAddProspect, setShowAddProspect] = useState(false);
   const [showReports, setShowReports] = useState(false);
   const [counties, setCounties] = useState([]);
@@ -657,18 +790,37 @@ function Dashboard({ user }) {
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
+  const filtered = leads.filter(l => {
+    const ms = search.toLowerCase();
+    const matchSearch = ms === "" ||
+      (l.owner_name && l.owner_name.toLowerCase().includes(ms)) ||
+      (l.property_address && l.property_address.toLowerCase().includes(ms)) ||
+      (l.county && l.county.toLowerCase().includes(ms)) ||
+      (l.contractor_name && l.contractor_name.toLowerCase().includes(ms));
+    const matchCounty = filterCounty === "All" || l.county === filterCounty;
+    const matchStatus = filterStatus === "All" || (l.status || "New") === filterStatus;
+    return matchSearch && matchCounty && matchStatus;
+  });
+
+  const selectedLead = selectedLeadIndex !== null ? filtered[selectedLeadIndex] : null;
+
   const handleSaveLead = (updated) => {
     setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-    setSelectedLead(updated);
   };
 
   const handleDeleteLead = (id) => {
     setLeads(prev => prev.filter(l => l.id !== id));
-    setSelectedLead(null);
+    setSelectedLeadIndex(null);
   };
 
-  const handleAddProspect = (record) => {
-    fetchLeads();
+  const handleAddProspect = () => { fetchLeads(); };
+
+  const handlePrev = () => {
+    if (selectedLeadIndex > 0) setSelectedLeadIndex(i => i - 1);
+  };
+
+  const handleNext = () => {
+    if (selectedLeadIndex < filtered.length - 1) setSelectedLeadIndex(i => i + 1);
   };
 
   const buildFollowUps = (filter) => {
@@ -702,18 +854,6 @@ function Dashboard({ user }) {
       printReport(`${type} Leads`, statusLeads, fus);
     }
   };
-
-  const filtered = leads.filter(l => {
-    const ms = search.toLowerCase();
-    const matchSearch = ms === "" ||
-      (l.owner_name && l.owner_name.toLowerCase().includes(ms)) ||
-      (l.property_address && l.property_address.toLowerCase().includes(ms)) ||
-      (l.county && l.county.toLowerCase().includes(ms)) ||
-      (l.contractor_name && l.contractor_name.toLowerCase().includes(ms));
-    const matchCounty = filterCounty === "All" || l.county === filterCounty;
-    const matchStatus = filterStatus === "All" || (l.status || "New") === filterStatus;
-    return matchSearch && matchCounty && matchStatus;
-  });
 
   const stats = {
     total: leads.length,
@@ -809,10 +949,10 @@ function Dashboard({ user }) {
           {filtered.length === 0 ? (
             <div className="empty-state"><p>No leads found.</p></div>
           ) : (
-            filtered.map(lead => (
+            filtered.map((lead, index) => (
               <div key={lead.id}
                 className={`lead-card ${selectedLead?.id === lead.id ? "selected" : ""}`}
-                onClick={() => setSelectedLead(lead)}
+                onClick={() => setSelectedLeadIndex(index)}
               >
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
@@ -835,13 +975,17 @@ function Dashboard({ user }) {
           <div style={{
             position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
             display:"flex", alignItems:"center", justifyContent:"center", zIndex:999
-          }} onClick={() => setSelectedLead(null)}>
+          }} onClick={() => setSelectedLeadIndex(null)}>
             <div onClick={e => e.stopPropagation()}>
               <LeadModal
                 lead={selectedLead}
-                onClose={() => setSelectedLead(null)}
+                onClose={() => setSelectedLeadIndex(null)}
                 onSave={handleSaveLead}
                 onDelete={handleDeleteLead}
+                onPrev={handlePrev}
+                onNext={handleNext}
+                hasPrev={selectedLeadIndex > 0}
+                hasNext={selectedLeadIndex < filtered.length - 1}
               />
             </div>
           </div>
