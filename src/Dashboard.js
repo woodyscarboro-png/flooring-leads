@@ -124,6 +124,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [lookupStatus, setLookupStatus] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [notesTimestamped, setNotesTimestamped] = useState(false);
 
   // Reset form when lead changes via prev/next
   useEffect(() => {
@@ -151,6 +152,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     setFollowUps(lead.follow_ups || []);
     setDeleteConfirm(false);
     setLookupStatus("");
+    setNotesTimestamped(false);
   }, [lead]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -227,9 +229,32 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
 
   const deleteFU = (id) => setFollowUps(prev => prev.filter(f => f.id !== id));
 
+  const formatTimestamp = () => {
+    const now = new Date();
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const day = days[now.getDay()];
+    const month = months[now.getMonth()];
+    const date = now.getDate();
+    const year = now.getFullYear();
+    let hours = now.getHours();
+    const minutes = String(now.getMinutes()).padStart(2,"0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${day}, ${month} ${date}, ${year} — ${hours}:${minutes} ${ampm}`;
+  };
+
   const addTimestampedNote = () => {
-    const ts = new Date().toLocaleString();
-    setNotes(prev => prev ? `[${ts}]\n\n${prev}` : `[${ts}]\n`);
+    const ts = formatTimestamp();
+    setNotes(prev => prev ? `${ts}\n\n${prev}` : `${ts}\n`);
+  };
+
+  const handleNotesFocus = () => {
+    if (!notesTimestamped) {
+      const ts = formatTimestamp();
+      setNotes(prev => prev ? `${ts}\n\n${prev}` : `${ts}\n`);
+      setNotesTimestamped(true);
+    }
   };
 
   const openMap = (addr) => {
@@ -419,7 +444,8 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Add notes here... each entry will be timestamped."
+                onFocus={handleNotesFocus}
+                placeholder="Click here to start a new timestamped note..."
                 style={{
                   width:"100%", minHeight:380, padding:12, fontSize:14,
                   border:"1px solid #ddd", borderRadius:6, resize:"vertical",
@@ -444,7 +470,10 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
                     style={{...inputStyle, cursor:"pointer", background:"#fff"}}
                   />
                   {showCal && (
-                    <div style={{position:"absolute",top:"100%",left:0,zIndex:100}} onClick={e => e.stopPropagation()}>
+                    <div onClick={e => e.stopPropagation()} style={{
+                      position:"fixed", top:"50%", left:"50%",
+                      transform:"translate(-50%, -50%)", zIndex:2000
+                    }}>
                       <CalendarPicker
                         value={newFU.date}
                         onChange={d => setNewFU(f => ({ ...f, date: d }))}
