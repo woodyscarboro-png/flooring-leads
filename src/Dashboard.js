@@ -2,20 +2,6 @@ import React, { useState, useEffect } from "react";
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
 
-// ── Force Safari on iPad/iPhone so tel: links work natively ──────────────────
-// Chrome on iOS (CriOS) blocks tel: handoff to iPhone. This detects it and
-// reopens the page in Safari automatically.
-(function () {
-  const ua = navigator.userAgent || "";
-  const isiOS = /iP(ad|hone|od)/i.test(ua);
-  const isChrome = /CriOS/i.test(ua); // Chrome on iOS always contains CriOS
-  if (isiOS && isChrome) {
-    // safari:// deep link reopens current URL in Safari
-    const current = window.location.href;
-    window.location.href = "safari://" + current.replace(/^https?:\/\//, "");
-  }
-})();
-
 const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
 const STATUS_COLORS = {
@@ -100,7 +86,14 @@ function Dashboard({ user }) {
   const [counties,       setCounties]       = useState([]);
   const [categories,     setCategories]     = useState([]);
 
-  useEffect(() => { fetchLeads(); }, []);
+  useEffect(() => {
+    const ua = navigator.userAgent || "";
+    if (/iP(ad|hone|od)/i.test(ua) && /CriOS/i.test(ua)) {
+      window.location.href = "safari://" + window.location.href.replace(/^https?:\/\//, "");
+      return;
+    }
+    fetchLeads();
+  }, []);
 
   const fetchLeads = async () => {
     setLoading(true);
