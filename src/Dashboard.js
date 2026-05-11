@@ -657,7 +657,7 @@ function Dashboard({ user }) {
       return;
     }
     fetchLeads();
-  }, []);
+  }, [fetchLeads]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
