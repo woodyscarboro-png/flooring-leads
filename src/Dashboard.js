@@ -666,11 +666,6 @@ function Dashboard({ user }) {
   }, []);
 
   useEffect(() => {
-    const ua = navigator.userAgent || "";
-    if (/iP(ad|hone|od)/i.test(ua) && /CriOS/i.test(ua)) {
-      window.location.href = "safari://" + window.location.href.replace(/^https?:\/\//, "");
-      return;
-    }
     fetchLeads();
   }, [fetchLeads]);
 
