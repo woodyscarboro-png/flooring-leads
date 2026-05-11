@@ -650,15 +650,6 @@ function Dashboard({ user }) {
   const [showReports, setShowReports] = useState(false);
   const [counties, setCounties] = useState([]);
 
-  useEffect(() => {
-    const ua = navigator.userAgent || "";
-    if (/iP(ad|hone|od)/i.test(ua) && /CriOS/i.test(ua)) {
-      window.location.href = "safari://" + window.location.href.replace(/^https?:\/\//, "");
-      return;
-    }
-    fetchLeads();
-  }, [fetchLeads]);
-
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
@@ -673,6 +664,15 @@ function Dashboard({ user }) {
     } catch (err) { console.error(err); }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const ua = navigator.userAgent || "";
+    if (/iP(ad|hone|od)/i.test(ua) && /CriOS/i.test(ua)) {
+      window.location.href = "safari://" + window.location.href.replace(/^https?:\/\//, "");
+      return;
+    }
+    fetchLeads();
+  }, [fetchLeads]);
 
   const filtered = leads.filter(l => {
     const ms = search.toLowerCase();
