@@ -259,7 +259,6 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     const zip     = isOwner ? form.owner_zip : form.contractor_zip;
     const firstName = name ? name.split(" ")[0] : "Sir or Madam";
     const now = new Date();
-    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
     const cityLine = [city, state, zip].filter(Boolean).join(", ");
