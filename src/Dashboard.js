@@ -106,6 +106,15 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     contractor_phone: lead.contractor_phone || lead.phone || "",
     contractor_email: lead.contractor_email || "",
     contractor_fax: lead.contractor_fax || "",
+    // Second contacts
+    owner_contact2_name: lead.owner_contact2_name || "",
+    owner_contact2_title: lead.owner_contact2_title || "",
+    owner_phone2: lead.owner_phone2 || "",
+    owner_email2: lead.owner_email2 || "",
+    contractor_contact2_name: lead.contractor_contact2_name || "",
+    contractor_contact2_title: lead.contractor_contact2_title || "",
+    contractor_phone2: lead.contractor_phone2 || "",
+    contractor_email2: lead.contractor_email2 || "",
   });
   const [notes, setNotes] = useState(lead.notes || "");
   const [followUps, setFollowUps] = useState(lead.follow_ups || []);
@@ -116,6 +125,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
   const [lookupStatus, setLookupStatus] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [notesTimestamped, setNotesTimestamped] = useState(false);
+  const [fuNotesTimestamped, setFuNotesTimestamped] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -137,12 +147,21 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       contractor_phone: lead.contractor_phone || lead.phone || "",
       contractor_email: lead.contractor_email || "",
       contractor_fax: lead.contractor_fax || "",
+      owner_contact2_name: lead.owner_contact2_name || "",
+      owner_contact2_title: lead.owner_contact2_title || "",
+      owner_phone2: lead.owner_phone2 || "",
+      owner_email2: lead.owner_email2 || "",
+      contractor_contact2_name: lead.contractor_contact2_name || "",
+      contractor_contact2_title: lead.contractor_contact2_title || "",
+      contractor_phone2: lead.contractor_phone2 || "",
+      contractor_email2: lead.contractor_email2 || "",
     });
     setNotes(lead.notes || "");
     setFollowUps(lead.follow_ups || []);
     setDeleteConfirm(false);
     setLookupStatus("");
     setNotesTimestamped(false);
+    setFuNotesTimestamped(false);
   }, [lead]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -221,6 +240,114 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       setNotes(prev => prev ? `${formatTimestamp()}\n\n${prev}` : `${formatTimestamp()}\n`);
       setNotesTimestamped(true);
     }
+  };
+
+  const handleFuNotesFocus = () => {
+    if (!fuNotesTimestamped) {
+      setNewFU(f => ({...f, notes: f.notes ? `${formatTimestamp()}\n\n${f.notes}` : `${formatTimestamp()}\n`}));
+      setFuNotesTimestamped(true);
+    }
+  };
+
+  // ── Letter Generation (downloads .docx-compatible HTML as .doc) ───────────
+  const openLetter = (side) => {
+    const isOwner = side === "owner";
+    const name    = isOwner ? form.owner_name : form.contractor_name;
+    const addr    = isOwner ? form.mailing_address : form.contractor_address;
+    const city    = isOwner ? form.owner_city : form.contractor_city;
+    const state   = isOwner ? form.owner_state : form.contractor_state;
+    const zip     = isOwner ? form.owner_zip : form.contractor_zip;
+    const firstName = name ? name.split(" ")[0] : "Sir or Madam";
+    const now = new Date();
+    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+    const cityLine = [city, state, zip].filter(Boolean).join(", ");
+
+    const html = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office'
+      xmlns:w='urn:schemas-microsoft-com:office:word'
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'>
+<style>
+  body { font-family: Cambria, serif; font-size: 12pt; margin: 1in; line-height: 1.5; }
+  .letterhead { margin-bottom: 24pt; }
+  .letterhead h2 { font-size: 14pt; margin: 0; }
+  .letterhead p { margin: 2pt 0; font-size: 11pt; color: #333; }
+  hr { border: none; border-top: 1px solid #333; margin: 12pt 0; }
+  .date { margin-bottom: 18pt; }
+  .address { margin-bottom: 18pt; }
+  .salutation { margin-bottom: 18pt; }
+  .body { margin-bottom: 36pt; color: #555; font-style: italic; }
+  .closing { margin-top: 36pt; }
+</style></head><body>
+<div class="letterhead">
+  <h2>KQF Discount Flooring, llc</h2>
+  <p><strong>Woody Scarboro</strong></p>
+  <p>10417 S Main St, Archdale, NC 27263</p>
+  <p>Phone: (336) 360-6535 | Mobile: (336) 870-6706</p>
+  <p>Email: ncflooringguy@gmail.com</p>
+</div>
+<hr>
+<div class="date">${dateStr}</div>
+<div class="address">
+  <strong>${name || ""}</strong><br>
+  ${addr || ""}<br>
+  ${cityLine}
+</div>
+<div class="salutation">Dear ${firstName}:</div>
+<div class="body">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</div>
+<br><br>
+<div class="closing">
+  <p>Sincerely,</p><br><br>
+  <p>_____________________________</p>
+  <p><strong>Woody Scarboro</strong></p>
+  <p>KQF Discount Flooring</p>
+</div>
+</body></html>`;
+
+    const blob = new Blob([html], { type: "application/msword" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `Letter_${(name||"Contact").replace(/\s+/g,"_")}_${dateStr.replace(/\s+/g,"_")}.doc`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Mailing Label ─────────────────────────────────────────────────────────
+  const printMailingLabel = (side) => {
+    const isOwner = side === "owner";
+    const name    = isOwner ? form.owner_name : form.contractor_name;
+    const addr    = isOwner ? form.mailing_address : form.contractor_address;
+    const city    = isOwner ? form.owner_city : form.contractor_city;
+    const state   = isOwner ? form.owner_state : form.contractor_state;
+    const zip     = isOwner ? form.owner_zip : form.contractor_zip;
+    const cityLine = [city, state, zip].filter(Boolean).join(", ");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mailing Label</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0.5in; background: #fff; }
+  .label { width: 2.625in; height: 1in; border: 1px dashed #ccc; padding: 8px 10px;
+    box-sizing: border-box; font-size: 10pt; line-height: 1.4;
+    display: inline-flex; flex-direction: column; justify-content: center; }
+  .from { background: #f9f9f9; font-size: 8.5pt; color: #555; margin-right: 16px; }
+  .to { border: 2px solid #1A5FA8; background: #EFF3F8; }
+  .wrap { display: flex; align-items: center; }
+  button { margin-bottom: 14px; padding: 7px 20px; background: #1a3a52;
+    color: #f4a826; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+  @media print { button { display: none; } }
+</style></head><body>
+<button onclick="window.print()">🖨 Print Label</button>
+<div class="wrap">
+  <div class="label from"><b>KQF Discount Flooring, llc</b><br>Woody Scarboro<br>10417 S Main St<br>Archdale, NC 27263</div>
+  <div class="label to"><b>${name||""}</b><br>${addr||""}<br>${cityLine}</div>
+</div>
+</body></html>`;
+
+    const w = window.open("","_blank");
+    w.document.write(html);
+    w.document.close();
   };
 
   const openMap = (addr) => { if (addr) window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, "_blank"); };
@@ -343,6 +470,31 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               <label style={lbl}>County</label>
               <input style={inp} value={form.county} onChange={e => set("county", e.target.value)} />
 
+              {/* Second Contact — Owner Side */}
+              <div style={{borderTop:"1px solid #e5e7eb",marginTop:12,paddingTop:12}}>
+                <h5 style={{margin:"0 0 10px",color:"#f59e0b",fontSize:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>Second Contact — Owner Side</h5>
+                <label style={lbl}>Contact Name</label>
+                <input style={inp} value={form.owner_contact2_name} onChange={e => set("owner_contact2_name", e.target.value)} placeholder="Contact name" />
+                <label style={lbl}>Contact Title</label>
+                <select style={inp} value={form.owner_contact2_title} onChange={e => set("owner_contact2_title", e.target.value)}>
+                  {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
+                </select>
+                {phoneRow("Phone", "owner_phone2")}
+                {emailRow("Email", "owner_email2")}
+              </div>
+
+              {/* Action buttons — Owner */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,marginBottom:16}}>
+                <button onClick={() => printMailingLabel("owner")} style={{
+                  background:"#27AE60",color:"#fff",border:"none",borderRadius:5,
+                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
+                }}>🏷 Print Owner Label</button>
+                <button onClick={() => openLetter("owner")} style={{
+                  background:"#1A5FA8",color:"#fff",border:"none",borderRadius:5,
+                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
+                }}>📄 Letter (Owner)</button>
+              </div>
+
               <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>
                 Contractor
               </h4>
@@ -359,6 +511,31 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               {emailRow("Email Address", "contractor_email")}
               <label style={lbl}>Fax</label>
               <input style={inp} value={form.contractor_fax} onChange={e => set("contractor_fax", e.target.value)} />
+
+              {/* Second Contact — Contractor Side */}
+              <div style={{borderTop:"1px solid #e5e7eb",marginTop:12,paddingTop:12}}>
+                <h5 style={{margin:"0 0 10px",color:"#f59e0b",fontSize:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>Second Contact — Contractor Side</h5>
+                <label style={lbl}>Contact Name</label>
+                <input style={inp} value={form.contractor_contact2_name} onChange={e => set("contractor_contact2_name", e.target.value)} placeholder="Contact name" />
+                <label style={lbl}>Contact Title</label>
+                <select style={inp} value={form.contractor_contact2_title} onChange={e => set("contractor_contact2_title", e.target.value)}>
+                  {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
+                </select>
+                {phoneRow("Phone", "contractor_phone2")}
+                {emailRow("Email", "contractor_email2")}
+              </div>
+
+              {/* Action buttons — Contractor */}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,marginBottom:8}}>
+                <button onClick={() => printMailingLabel("contractor")} style={{
+                  background:"#27AE60",color:"#fff",border:"none",borderRadius:5,
+                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
+                }}>🏷 Print Contractor Label</button>
+                <button onClick={() => openLetter("contractor")} style={{
+                  background:"#1A5FA8",color:"#fff",border:"none",borderRadius:5,
+                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
+                }}>📄 Letter (Contractor)</button>
+              </div>
 
               {/* Find Phone & Email */}
               <div style={{marginTop:16, padding:14, background:"#f0f9ff", borderRadius:8, border:"1px solid #bae6fd"}}>
@@ -427,8 +604,10 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
                   {["Scheduled","Completed","Cancelled","No Answer"].map(s => <option key={s}>{s}</option>)}
                 </select>
                 <label style={lbl}>Notes</label>
-                <textarea value={newFU.notes} onChange={e => setNewFU(f => ({...f, notes:e.target.value}))}
-                  placeholder="Notes for this follow-up..."
+                <textarea value={newFU.notes}
+                  onChange={e => setNewFU(f => ({...f, notes:e.target.value}))}
+                  onFocus={handleFuNotesFocus}
+                  placeholder="Click to add timestamped note..."
                   style={{...inp, minHeight:80, resize:"vertical", fontFamily:"inherit"}} />
                 <button onClick={addFollowUp} style={{
                   background:"#10b981",color:"#fff",border:"none",
