@@ -371,17 +371,21 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
   };
   const lbl = { fontSize:12, color:"#666", marginBottom:2, display:"block" };
 
-  // Phone/email with call and email buttons
+  // Phone/email with call and email buttons — always visible
   const phoneRow = (label, key) => (
     <div>
       <label style={lbl}>{label}</label>
       <div style={{display:"flex", gap:8, marginBottom:8}}>
         <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
-        {form[key] && <a href={`tel:${form[key].replace(/\D/g,"")}`} style={{
-          display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
-          background:"#1A5FA8", color:"#fff", borderRadius:5, fontSize:13,
-          fontWeight:700, textDecoration:"none", whiteSpace:"nowrap"
-        }}>📞 Call</a>}
+        <a href={form[key] ? `tel:${form[key].replace(/\D/g,"")}` : undefined}
+          onClick={!form[key] ? e => e.preventDefault() : undefined}
+          style={{
+            display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
+            background: form[key] ? "#1A5FA8" : "#94a3b8",
+            color:"#fff", borderRadius:5, fontSize:13,
+            fontWeight:700, textDecoration:"none", whiteSpace:"nowrap",
+            cursor: form[key] ? "pointer" : "not-allowed", flexShrink:0
+          }}>📞 Call</a>
       </div>
     </div>
   );
@@ -391,11 +395,15 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       <label style={lbl}>{label}</label>
       <div style={{display:"flex", gap:8, marginBottom:8}}>
         <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
-        {form[key] && <a href={`mailto:${form[key]}`} style={{
-          display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
-          background:"#27AE60", color:"#fff", borderRadius:5, fontSize:13,
-          fontWeight:700, textDecoration:"none", whiteSpace:"nowrap"
-        }}>✉ Email</a>}
+        <a href={form[key] ? `mailto:${form[key]}` : undefined}
+          onClick={!form[key] ? e => e.preventDefault() : undefined}
+          style={{
+            display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
+            background: form[key] ? "#27AE60" : "#94a3b8",
+            color:"#fff", borderRadius:5, fontSize:13,
+            fontWeight:700, textDecoration:"none", whiteSpace:"nowrap",
+            cursor: form[key] ? "pointer" : "not-allowed", flexShrink:0
+          }}>✉ Email</a>
       </div>
     </div>
   );
