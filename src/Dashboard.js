@@ -407,7 +407,23 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     } catch (e) { console.error(e); }
   };
 
-  const tabStyle = (t) => ({
+  const formatDate = (dateStr, timeStr) => {
+    if (!dateStr) return "";
+    try {
+      const [y,m,d] = dateStr.split("-").map(Number);
+      const dt = new Date(y, m-1, d);
+      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
+      if (timeStr) {
+        const [h, min] = timeStr.split(":").map(Number);
+        const ampm = h >= 12 ? "PM" : "AM";
+        const hour = h % 12 || 12;
+        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
+      }
+      return result;
+    } catch(e) { return `${dateStr} ${timeStr||""}`; }
+  };
     padding:"8px 16px", cursor:"pointer", border:"none", background:"none",
     borderBottom: activeTab === t ? "2px solid #3b82f6" : "2px solid transparent",
     color: activeTab === t ? "#3b82f6" : "#555",
@@ -425,6 +441,8 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       const ts = formatTimestamp();
       const entry = `📞 Call initiated — ${ts}\n   Duration: _____ min\n   Notes: \n`;
       setNotes(prev => prev ? `${entry}\n${prev}` : entry);
+      setNotesTimestamped(true);
+      setActiveTab("notes");
     };
     return (
     <div>
@@ -450,6 +468,8 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       const ts = formatTimestamp();
       const entry = `✉ Email sent — ${ts}\n   Subject: \n   Notes: \n`;
       setNotes(prev => prev ? `${entry}\n${prev}` : entry);
+      setNotesTimestamped(true);
+      setActiveTab("notes");
     };
     return (
     <div>
@@ -694,7 +714,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
                     borderLeft:`3px solid ${fu.status==="Completed"?"#10b981":fu.status==="Cancelled"?"#ef4444":"#3b82f6"}`
                   }}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <strong style={{fontSize:14}}>{fu.date} {fu.time && `@ ${fu.time}`} — {fu.type}</strong>
+                      <strong style={{fontSize:14}}>{formatDate(fu.date, fu.time)} — {fu.type}</strong>
                       <span style={{fontSize:12,padding:"2px 8px",borderRadius:10,
                         background:fu.status==="Completed"?"#d1fae5":fu.status==="Cancelled"?"#fee2e2":"#dbeafe",
                         color:fu.status==="Completed"?"#065f46":fu.status==="Cancelled"?"#991b1b":"#1e40af"
@@ -857,10 +877,28 @@ function AddProspectModal({ onClose, onSave }) {
 }
 
 // ── Reports ────────────────────────────────────────────────────────────────────
+  const fmtReportDate = (dateStr, timeStr) => {
+    if (!dateStr) return "";
+    try {
+      const [y,m,d] = dateStr.split("-").map(Number);
+      const dt = new Date(y, m-1, d);
+      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
+      if (timeStr) {
+        const [h, min] = timeStr.split(":").map(Number);
+        const ampm = h >= 12 ? "PM" : "AM";
+        const hour = h % 12 || 12;
+        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
+      }
+      return result;
+    } catch(e) { return `${dateStr} ${timeStr||""}`; }
+  };
+
 function printReport(title, leads, followUps) {
   const rows = followUps.map(({lead, fu}) => `
     <tr>
-      <td>${fu.date||""} ${fu.time||""}</td><td>${fu.type||""}</td><td>${fu.status||""}</td>
+      <td>${fmtReportDate(fu.date, fu.time)}</td><td>${fu.type||""}</td><td>${fu.status||""}</td>
       <td>${lead.owner_name||lead.contractor_name||""}</td>
       <td>${lead.property_address||""}</td>
       <td>${lead.owner_phone||lead.contractor_phone||""}</td>
