@@ -115,6 +115,13 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     contractor_contact2_title: lead.contractor_contact2_title || "",
     contractor_phone2: lead.contractor_phone2 || "",
     contractor_email2: lead.contractor_email2 || "",
+    contractor_mailing_address: lead.contractor_mailing_address || "",
+    contractor_c2_address: lead.contractor_c2_address || "",
+    contractor_c2_mailing: lead.contractor_c2_mailing || "",
+    contractor_c2_city: lead.contractor_c2_city || "",
+    contractor_c2_state: lead.contractor_c2_state || "NC",
+    contractor_c2_zip: lead.contractor_c2_zip || "",
+    contractor_c2_fax: lead.contractor_c2_fax || "",
   });
   const [notes, setNotes] = useState(lead.notes || "");
   const [followUps, setFollowUps] = useState(lead.follow_ups || []);
@@ -587,12 +594,20 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               </div>
 
               <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>
-                Contractor
+                Contractor / Builder
               </h4>
-              <label style={lbl}>Contractor Name</label>
-              <input style={inp} value={form.contractor_name} onChange={e => set("contractor_name", e.target.value)} />
-              <label style={lbl}>Business Address</label>
-              <input style={inp} value={form.contractor_address} onChange={e => set("contractor_address", e.target.value)} />
+              <label style={lbl}>Contractor Company Name</label>
+              <input style={inp} value={form.contractor_name} onChange={e => set("contractor_name", e.target.value)} placeholder="Company name" />
+              <label style={lbl}>Company Owner Name</label>
+              <input style={inp} value={form.contractor_contact2_name} onChange={e => set("contractor_contact2_name", e.target.value)} placeholder="Owner's full name" />
+              <label style={lbl}>Contact Title</label>
+              <select style={inp} value={form.contractor_contact2_title} onChange={e => set("contractor_contact2_title", e.target.value)}>
+                {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
+              </select>
+              <label style={lbl}>Street Address</label>
+              <input style={inp} value={form.contractor_address} onChange={e => set("contractor_address", e.target.value)} placeholder="Street address" />
+              <label style={lbl}>Mailing Address (if PO Box)</label>
+              <input style={inp} value={form.contractor_mailing_address||""} onChange={e => set("contractor_mailing_address", e.target.value)} placeholder="PO Box or mailing address" />
               <div style={{display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8}}>
                 <div><label style={lbl}>City</label><input style={inp} value={form.contractor_city} onChange={e => set("contractor_city", e.target.value)} /></div>
                 <div><label style={lbl}>State</label><input style={inp} value={form.contractor_state} onChange={e => set("contractor_state", e.target.value)} /></div>
@@ -612,8 +627,19 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
                 <select style={inp} value={form.contractor_contact2_title} onChange={e => set("contractor_contact2_title", e.target.value)}>
                   {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
                 </select>
+                <label style={lbl}>Street Address</label>
+                <input style={inp} value={form.contractor_c2_address||""} onChange={e => set("contractor_c2_address", e.target.value)} placeholder="Street address" />
+                <label style={lbl}>Mailing Address (if PO Box)</label>
+                <input style={inp} value={form.contractor_c2_mailing||""} onChange={e => set("contractor_c2_mailing", e.target.value)} placeholder="PO Box or mailing address" />
+                <div style={{display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8}}>
+                  <div><label style={lbl}>City</label><input style={inp} value={form.contractor_c2_city||""} onChange={e => set("contractor_c2_city", e.target.value)} /></div>
+                  <div><label style={lbl}>State</label><input style={inp} value={form.contractor_c2_state||"NC"} onChange={e => set("contractor_c2_state", e.target.value)} /></div>
+                  <div><label style={lbl}>Zip</label><input style={inp} value={form.contractor_c2_zip||""} onChange={e => set("contractor_c2_zip", e.target.value)} /></div>
+                </div>
                 {phoneRow("Phone", "contractor_phone2")}
                 {emailRow("Email", "contractor_email2")}
+                <label style={lbl}>Fax</label>
+                <input style={inp} value={form.contractor_c2_fax||""} onChange={e => set("contractor_c2_fax", e.target.value)} />
               </div>
 
               {/* Action buttons — Contractor */}
@@ -899,35 +925,6 @@ function AddProspectModal({ onClose, onSave }) {
 
 function buildReportHTML(title, leads, followUps) {
   return { title, items: followUps, generated: new Date().toLocaleString() };
-}
-
-function printReport(title, leads, followUps) {
-  const rows = followUps.map(({lead, fu}) => `
-    <tr>
-      <td>${fmtReportDate(fu.date, fu.time)}</td><td>${fu.type||""}</td><td>${fu.status||""}</td>
-      <td>${lead.owner_name||lead.contractor_name||""}</td>
-      <td>${lead.property_address||""}</td>
-      <td>${lead.owner_phone||lead.contractor_phone||""}</td>
-      <td>${fu.notes||""}</td>
-    </tr>`).join("");
-  const html = `<!DOCTYPE html><html><head><title>${title}</title>
-  <style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px;}
-  h1{font-size:18px;margin-bottom:4px;}h2{font-size:14px;color:#555;margin-bottom:16px;}
-  table{width:100%;border-collapse:collapse;}th{background:#3b82f6;color:#fff;padding:6px 8px;text-align:left;}
-  td{padding:5px 8px;border-bottom:1px solid #eee;}tr:nth-child(even){background:#f9f9f9;}
-  .close-btn{position:fixed;top:16px;right:20px;background:#ef4444;color:#fff;border:none;
-    border-radius:6px;padding:8px 18px;font-size:14px;cursor:pointer;font-weight:600;z-index:999;}
-  @media print{.close-btn,.print-btn{display:none;}}</style></head><body>
-  <button class="close-btn" onclick="window.close()">✕ Close</button>
-  <h1>KQF Discount Flooring — ${title}</h1>
-  <h2>Generated: ${new Date().toLocaleString()}</h2>
-  <button class="print-btn" onclick="window.print()" style="margin-bottom:12px;padding:6px 16px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;">🖨 Print</button>
-  <table><thead><tr><th>Date/Time</th><th>Type</th><th>Status</th><th>Name</th><th>Address</th><th>Phone</th><th>Notes</th></tr></thead>
-  <tbody>${rows||"<tr><td colspan='7' style='text-align:center;padding:20px;color:#888;'>No records found</td></tr>"}</tbody></table>
-  </body></html>`;
-  const w = window.open("","_blank");
-  w.document.write(html);
-  w.document.close();
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
