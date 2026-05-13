@@ -898,15 +898,7 @@ function AddProspectModal({ onClose, onSave }) {
   };
 
 function buildReportHTML(title, leads, followUps) {
-  const rows = followUps.map(({lead, fu}) => `
-    <tr>
-      <td>${fmtReportDate(fu.date, fu.time)}</td><td>${fu.type||""}</td><td>${fu.status||""}</td>
-      <td>${lead.owner_name||lead.contractor_name||""}</td>
-      <td>${lead.property_address||""}</td>
-      <td>${lead.owner_phone||lead.contractor_phone||""}</td>
-      <td>${fu.notes||""}</td>
-    </tr>`).join("");
-  return { title, rows, generated: new Date().toLocaleString() };
+  return { title, items: followUps, generated: new Date().toLocaleString() };
 }
 
 function printReport(title, leads, followUps) {
@@ -993,25 +985,47 @@ function Dashboard({ user }) {
   const handleNext = () => { if (selectedLeadIndex < filtered.length - 1) setSelectedLeadIndex(i => i + 1); };
 
   const buildFollowUps = (filter) => {
-    const today = new Date().toISOString().split("T")[0];
-    const weekEnd = new Date(Date.now() + 7*86400000).toISOString().split("T")[0];
-    const monthEnd = new Date(Date.now() + 30*86400000).toISOString().split("T")[0];
+    const now = new Date();
+    // Use start of today (midnight) so today's items are never excluded
+    const todayStr = now.toISOString().split("T")[0];
+    const weekEnd  = new Date(now.getTime() + 7*86400000).toISOString().split("T")[0];
+    const monthEnd = new Date(now.getTime() + 30*86400000).toISOString().split("T")[0];
+    // Yesterday — so "upcoming" includes items from yesterday that may not have been done yet
+    const yesterday = new Date(now.getTime() - 86400000).toISOString().split("T")[0];
     const result = [];
     leads.forEach(lead => {
       (lead.follow_ups || []).forEach(fu => {
-        if (filter === "today" && fu.date !== today) return;
-        if (filter === "week" && (fu.date < today || fu.date > weekEnd)) return;
-        if (filter === "month" && (fu.date < today || fu.date > monthEnd)) return;
-        if (filter === "upcoming" && fu.date < today) return;
+        if (!fu.date) return;
+        // Only exclude Cancelled follow-ups from forward-looking reports
+        if (filter !== "all" && fu.status === "Cancelled") return;
+        if (filter === "today"    && fu.date !== todayStr) return;
+        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
+        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
+        if (filter === "upcoming" && fu.date < yesterday) return;
         result.push({ lead, fu });
       });
     });
     return result.sort((a, b) => a.fu.date > b.fu.date ? 1 : -1);
   };
 
+  const markFollowUpStatus = async (leadId, fuId, newStatus, newLeadStatus) => {
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+    const updatedFUs = (lead.follow_ups || []).map(f =>
+      f.id === fuId ? { ...f, status: newStatus } : f
+    );
+    const updates = { follow_ups: updatedFUs };
+    if (newLeadStatus) updates.status = newLeadStatus;
+    try {
+      await fetch(`${RTDB_URL}/leads/${leadId}.json`, {
+        method: "PATCH", body: JSON.stringify(updates)
+      });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
+      setReportHTML(null); // close report so user sees updated list
+    } catch(e) { console.error(e); }
+  };
   const runReport = (type) => {
     setShowReports(false);
-    const isiOS = /iP(ad|hone|od)/i.test(navigator.userAgent);
     let fuData, reportTitle;
     if (["today","week","month","upcoming","all"].includes(type)) {
       const labels = { today:"Today's Follow-Ups", week:"This Week's Follow-Ups",
@@ -1024,12 +1038,7 @@ function Dashboard({ user }) {
       fuData = [];
       statusLeads.forEach(lead => (lead.follow_ups || []).forEach(fu => fuData.push({ lead, fu })));
     }
-    if (isiOS) {
-      // Show inline on iPad — Safari blocks window.open
-      setReportHTML(buildReportHTML(reportTitle, leads, fuData));
-    } else {
-      printReport(reportTitle, leads, fuData);
-    }
+    setReportHTML(buildReportHTML(reportTitle, leads, fuData));
   };
 
   const stats = {
@@ -1175,36 +1184,86 @@ function Dashboard({ user }) {
         <div style={{position:"fixed",inset:0,zIndex:150}} onClick={() => setShowReports(false)} />
       )}
 
-      {/* ── Inline Report Modal (iPad) ── */}
+      {/* ── Inline Report Modal (iPad + interactive) ── */}
       {reportHTML && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:500,
           display:"flex",alignItems:"flex-start",justifyContent:"center",
           overflowY:"auto",padding:"16px"}}>
-          <div style={{background:"#fff",borderRadius:10,width:"100%",maxWidth:900,
+          <div style={{background:"#fff",borderRadius:10,width:"100%",maxWidth:960,
             boxShadow:"0 8px 32px rgba(0,0,0,0.3)",overflow:"hidden"}}>
             <div style={{background:"#3b82f6",padding:"14px 20px",display:"flex",
-              justifyContent:"space-between",alignItems:"center"}}>
+              justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
               <div>
                 <div style={{color:"#fff",fontWeight:700,fontSize:16}}>KQF Discount Flooring — {reportHTML.title}</div>
-                <div style={{color:"#dbeafe",fontSize:12}}>Generated: {reportHTML.generated}</div>
+                <div style={{color:"#dbeafe",fontSize:12}}>Generated: {reportHTML.generated} &nbsp;|&nbsp; {reportHTML.items.length} records</div>
               </div>
               <button onClick={() => setReportHTML(null)} style={{background:"#ef4444",color:"#fff",
                 border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
             </div>
-            <div style={{overflowX:"auto",padding:"16px"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead>
-                  <tr style={{background:"#3b82f6"}}>
-                    {["Date/Time","Type","Status","Name","Address","Phone","Notes"].map(h => (
-                      <th key={h} style={{color:"#fff",padding:"8px",textAlign:"left",
-                        whiteSpace:"nowrap",fontWeight:600}}>{h}</th>
+            {reportHTML.items.length === 0 ? (
+              <div style={{padding:40,textAlign:"center",color:"#888",fontSize:16}}>No records found for this report.</div>
+            ) : (
+              <div style={{overflowX:"auto",padding:"0 0 16px"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead style={{position:"sticky",top:0,background:"#1e40af",zIndex:9}}>
+                    <tr>
+                      {["Date/Time","Type","Current Status","Name","Phone","Notes","Actions"].map(h => (
+                        <th key={h} style={{color:"#fff",padding:"10px 8px",textAlign:"left",
+                          whiteSpace:"nowrap",fontWeight:600,borderBottom:"2px solid #3b82f6"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportHTML.items.map((item, i) => (
+                      <tr key={i} style={{background: i%2===0?"#fff":"#f8fafc",
+                        borderBottom:"1px solid #e5e7eb"}}>
+                        <td style={{padding:"8px",whiteSpace:"nowrap",color:"#374151"}}>
+                          {fmtReportDate(item.fu.date, item.fu.time)}
+                        </td>
+                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>{item.fu.type||""}</td>
+                        <td style={{padding:"8px"}}>
+                          <span style={{
+                            padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
+                            background: item.fu.status==="Completed"?"#d1fae5":
+                              item.fu.status==="Cancelled"?"#fee2e2":
+                              item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
+                            color: item.fu.status==="Completed"?"#065f46":
+                              item.fu.status==="Cancelled"?"#991b1b":
+                              item.fu.status==="No Answer"?"#92400e":"#1e40af"
+                          }}>{item.fu.status||"Scheduled"}</span>
+                        </td>
+                        <td style={{padding:"8px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {item.lead.owner_name||item.lead.contractor_name||""}
+                        </td>
+                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
+                          {item.lead.owner_phone||item.lead.contractor_phone||""}
+                        </td>
+                        <td style={{padding:"8px",maxWidth:200,color:"#555",fontSize:12}}>
+                          {(item.fu.notes||"").substring(0,80)}{(item.fu.notes||"").length>80?"…":""}
+                        </td>
+                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
+                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                            {["Completed","No Answer","Cancelled"].map(s => (
+                              <button key={s}
+                                onClick={() => markFollowUpStatus(
+                                  item.lead.id, item.fu.id, s,
+                                  s==="Completed" ? "Contacted" : undefined
+                                )}
+                                style={{
+                                  padding:"4px 8px",fontSize:11,border:"none",borderRadius:4,
+                                  cursor:"pointer",fontWeight:600,
+                                  background: s==="Completed"?"#10b981":s==="No Answer"?"#f59e0b":"#ef4444",
+                                  color:"#fff"
+                                }}>{s}</button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody dangerouslySetInnerHTML={{__html: reportHTML.rows ||
-                  "<tr><td colSpan='7' style='text-align:center;padding:20px;color:#888'>No records found</td></tr>"}} />
-              </table>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
