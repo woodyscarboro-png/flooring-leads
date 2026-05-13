@@ -249,7 +249,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     }
   };
 
-  // ── Letter Generation (downloads .docx-compatible HTML as .doc) ───────────
+  // ── Letter Generation ─────────────────────────────────────────────────────
   const openLetter = (side) => {
     const isOwner = side === "owner";
     const name    = isOwner ? form.owner_name : form.contractor_name;
@@ -262,56 +262,105 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
     const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
     const cityLine = [city, state, zip].filter(Boolean).join(", ");
+    const isiOS = /iP(ad|hone|od)/i.test(navigator.userAgent);
 
-    const html = `
-<html xmlns:o='urn:schemas-microsoft-com:office:office'
+    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
       xmlns:w='urn:schemas-microsoft-com:office:word'
       xmlns='http://www.w3.org/TR/REC-html40'>
 <head><meta charset='utf-8'>
 <style>
-  body { font-family: Cambria, serif; font-size: 12pt; margin: 1in; line-height: 1.5; }
-  .letterhead { margin-bottom: 24pt; }
-  .letterhead h2 { font-size: 14pt; margin: 0; }
+  @page { margin: 1in; }
+  body { font-family: Cambria, 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; color: #000; }
+  .letterhead h2 { font-size: 14pt; margin: 0 0 2pt; }
   .letterhead p { margin: 2pt 0; font-size: 11pt; color: #333; }
   hr { border: none; border-top: 1px solid #333; margin: 12pt 0; }
-  .date { margin-bottom: 18pt; }
-  .address { margin-bottom: 18pt; }
-  .salutation { margin-bottom: 18pt; }
-  .body { margin-bottom: 36pt; color: #555; font-style: italic; }
-  .closing { margin-top: 36pt; }
+  p { margin: 0 0 12pt; }
 </style></head><body>
 <div class="letterhead">
   <h2>KQF Discount Flooring, llc</h2>
   <p><strong>Woody Scarboro</strong></p>
   <p>10417 S Main St, Archdale, NC 27263</p>
-  <p>Phone: (336) 360-6535 | Mobile: (336) 870-6706</p>
+  <p>Phone: (336) 360-6535 &nbsp;|&nbsp; Mobile: (336) 870-6706</p>
   <p>Email: ncflooringguy@gmail.com</p>
 </div>
 <hr>
-<div class="date">${dateStr}</div>
-<div class="address">
-  <strong>${name || ""}</strong><br>
-  ${addr || ""}<br>
-  ${cityLine}
-</div>
-<div class="salutation">Dear ${firstName}:</div>
-<div class="body">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</div>
+<p>${dateStr}</p>
+<p><strong>${name||""}</strong><br>${addr||""}<br>${cityLine}</p>
+<p>Dear ${firstName}:</p>
+<p style="color:#777;font-style:italic">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</p>
 <br><br>
-<div class="closing">
-  <p>Sincerely,</p><br><br>
-  <p>_____________________________</p>
-  <p><strong>Woody Scarboro</strong></p>
-  <p>KQF Discount Flooring</p>
-</div>
+<p>Sincerely,</p>
+<br><br>
+<p>_____________________________<br><strong>Woody Scarboro</strong><br>KQF Discount Flooring</p>
 </body></html>`;
 
-    const blob = new Blob([html], { type: "application/msword" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `Letter_${(name||"Contact").replace(/\s+/g,"_")}_${dateStr.replace(/\s+/g,"_")}.doc`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const safeName = `Letter_${(name||"Contact").replace(/[^a-zA-Z0-9]/g,"_")}_${dateStr.replace(/[^a-zA-Z0-9]/g,"_")}`;
+
+    // Full letter HTML with print button for iPad
+    const iosHtml = `<!DOCTYPE html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Letter — ${name||"Contact"}</title>
+<style>
+  body { font-family: 'Times New Roman', serif; font-size: 12pt; 
+    margin: 0.75in 1in; line-height: 1.6; color: #000; background:#fff; }
+  .tip { background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;
+    padding:10px 14px; margin-bottom:20px; font-size:13px; font-family:sans-serif;
+    color:#0369a1; display:flex; align-items:center; gap:8px; }
+  .letterhead h2 { font-size:14pt; margin:0 0 2pt; }
+  .letterhead p { margin:2pt 0; font-size:11pt; color:#333; font-family:sans-serif; }
+  hr { border:none; border-top:1px solid #333; margin:14pt 0; }
+  p { margin:0 0 12pt; }
+  .sig-line { border-bottom:1px solid #000; width:200px; margin-bottom:4px; }
+  @media print { .tip { display:none; } body { margin:0.75in 1in; } }
+</style></head><body>
+<div class="tip">
+  📋 <span>To save to Pages: tap the <strong>Share</strong> button (box with arrow) → <strong>Open in Pages</strong></span>
+</div>
+<div class="letterhead">
+  <h2>KQF Discount Flooring, llc</h2>
+  <p><strong>Woody Scarboro</strong></p>
+  <p>10417 S Main St, Archdale, NC 27263</p>
+  <p>Phone: (336) 360-6535 &nbsp;|&nbsp; Mobile: (336) 870-6706</p>
+  <p>Email: ncflooringguy@gmail.com</p>
+</div>
+<hr>
+<p>${dateStr}</p>
+<br>
+<p><strong>${name||""}</strong><br>${addr||""}<br>${cityLine}</p>
+<br>
+<p>Dear ${firstName}:</p>
+<br>
+<p style="color:#777;font-style:italic">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</p>
+<br><br><br>
+<p>Sincerely,</p>
+<br><br><br>
+<div class="sig-line"></div>
+<p><strong>Woody Scarboro</strong><br>KQF Discount Flooring</p>
+</body></html>`;
+
+    if (isiOS) {
+      // Open formatted letter in new Safari tab — user taps Share → Open in Pages
+      const blob = new Blob([iosHtml], { type: "text/html" });
+      const url  = URL.createObjectURL(blob);
+      const w    = window.open(url, "_blank");
+      if (!w) {
+        // Popup blocked fallback
+        const a = document.createElement("a");
+        a.href = url; a.download = safeName + ".doc"; a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else {
+      // On PC — download .doc which Windows opens in Word automatically
+      const blob = new Blob(["\ufeff" + html], { type: "application/msword" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = safeName + ".doc";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
   };
 
   // ── Mailing Label ─────────────────────────────────────────────────────────
@@ -1054,4 +1103,4 @@ function Dashboard({ user }) {
   );
 }
 
-export default Dashboard;
+export default Dashboard;v
