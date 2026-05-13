@@ -986,7 +986,7 @@ function Dashboard({ user }) {
 
   return (
     <div className="dashboard">
-      <header className="header">
+      <header className="header" style={{position:"sticky",top:0,zIndex:100}}>
         <div className="header-left">
           <h1>KQF Discount Flooring</h1>
           <span className="header-subtitle">Lead Management</span>
@@ -997,14 +997,14 @@ function Dashboard({ user }) {
         </div>
       </header>
 
-      <div className="stats-bar">
+      <div className="stats-bar" style={{position:"sticky",top:62,zIndex:99}}>
         <div className="stat-card"><span className="stat-number">{stats.total}</span><span className="stat-label">Total Leads</span></div>
         <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.New}}>{stats.new}</span><span className="stat-label">New</span></div>
         <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.Contacted}}>{stats.contacted}</span><span className="stat-label">Contacted</span></div>
         <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.Won}}>{stats.won}</span><span className="stat-label">Won</span></div>
       </div>
 
-      <div className="filters">
+      <div className="filters" style={{position:"sticky",top:122,zIndex:98,background:"#fff",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
         <input className="search-input" type="text" placeholder="Search by name, address, phone..."
           value={search} onChange={e => setSearch(e.target.value)} />
         <select value={filterCounty} onChange={e => setFilterCounty(e.target.value)}>
