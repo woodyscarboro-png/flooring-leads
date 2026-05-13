@@ -420,14 +420,19 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
   };
   const lbl = { fontSize:12, color:"#666", marginBottom:2, display:"block" };
 
-  // Phone/email with call and email buttons — always visible
-  const phoneRow = (label, key) => (
+  const phoneRow = (label, key) => {
+    const addCallNote = () => {
+      const ts = formatTimestamp();
+      const entry = `📞 Call initiated — ${ts}\n   Duration: _____ min\n   Notes: \n`;
+      setNotes(prev => prev ? `${entry}\n${prev}` : entry);
+    };
+    return (
     <div>
       <label style={lbl}>{label}</label>
       <div style={{display:"flex", gap:8, marginBottom:8}}>
         <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
         <a href={form[key] ? `tel:${form[key].replace(/\D/g,"")}` : undefined}
-          onClick={!form[key] ? e => e.preventDefault() : undefined}
+          onClick={e => { if(!form[key]){e.preventDefault();} else { addCallNote(); } }}
           style={{
             display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
             background: form[key] ? "#1A5FA8" : "#94a3b8",
@@ -437,15 +442,22 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
           }}>📞 Call</a>
       </div>
     </div>
-  );
+    );
+  };
 
-  const emailRow = (label, key) => (
+  const emailRow = (label, key) => {
+    const addEmailNote = () => {
+      const ts = formatTimestamp();
+      const entry = `✉ Email sent — ${ts}\n   Subject: \n   Notes: \n`;
+      setNotes(prev => prev ? `${entry}\n${prev}` : entry);
+    };
+    return (
     <div>
       <label style={lbl}>{label}</label>
       <div style={{display:"flex", gap:8, marginBottom:8}}>
         <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
         <a href={form[key] ? `mailto:${form[key]}` : undefined}
-          onClick={!form[key] ? e => e.preventDefault() : undefined}
+          onClick={e => { if(!form[key]){e.preventDefault();} else { addEmailNote(); } }}
           style={{
             display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
             background: form[key] ? "#27AE60" : "#94a3b8",
@@ -455,7 +467,8 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
           }}>✉ Email</a>
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div onClick={onClose} style={{
@@ -1103,4 +1116,4 @@ function Dashboard({ user }) {
   );
 }
 
-export default Dashboard;v
+export default Dashboard;
