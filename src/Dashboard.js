@@ -424,6 +424,8 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       return result;
     } catch(e) { return `${dateStr} ${timeStr||""}`; }
   };
+
+  const tabStyle = (t) => ({
     padding:"8px 16px", cursor:"pointer", border:"none", background:"none",
     borderBottom: activeTab === t ? "2px solid #3b82f6" : "2px solid transparent",
     color: activeTab === t ? "#3b82f6" : "#555",
@@ -895,6 +897,18 @@ function AddProspectModal({ onClose, onSave }) {
     } catch(e) { return `${dateStr} ${timeStr||""}`; }
   };
 
+function buildReportHTML(title, leads, followUps) {
+  const rows = followUps.map(({lead, fu}) => `
+    <tr>
+      <td>${fmtReportDate(fu.date, fu.time)}</td><td>${fu.type||""}</td><td>${fu.status||""}</td>
+      <td>${lead.owner_name||lead.contractor_name||""}</td>
+      <td>${lead.property_address||""}</td>
+      <td>${lead.owner_phone||lead.contractor_phone||""}</td>
+      <td>${fu.notes||""}</td>
+    </tr>`).join("");
+  return { title, rows, generated: new Date().toLocaleString() };
+}
+
 function printReport(title, leads, followUps) {
   const rows = followUps.map(({lead, fu}) => `
     <tr>
@@ -934,6 +948,7 @@ function Dashboard({ user }) {
   const [selectedLeadIndex, setSelectedLeadIndex] = useState(null);
   const [showAddProspect, setShowAddProspect] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [reportHTML, setReportHTML] = useState(null);
   const [counties, setCounties] = useState([]);
 
   const fetchLeads = useCallback(async () => {
@@ -996,15 +1011,24 @@ function Dashboard({ user }) {
 
   const runReport = (type) => {
     setShowReports(false);
+    const isiOS = /iP(ad|hone|od)/i.test(navigator.userAgent);
+    let fuData, reportTitle;
     if (["today","week","month","upcoming","all"].includes(type)) {
       const labels = { today:"Today's Follow-Ups", week:"This Week's Follow-Ups",
         month:"This Month's Follow-Ups", upcoming:"All Upcoming Follow-Ups", all:"All Follow-Ups Ever" };
-      printReport(labels[type], leads, buildFollowUps(type));
+      reportTitle = labels[type];
+      fuData = buildFollowUps(type);
     } else {
+      reportTitle = `${type} Leads`;
       const statusLeads = leads.filter(l => (l.status || "New") === type);
-      const fus = [];
-      statusLeads.forEach(lead => (lead.follow_ups || []).forEach(fu => fus.push({ lead, fu })));
-      printReport(`${type} Leads`, statusLeads, fus);
+      fuData = [];
+      statusLeads.forEach(lead => (lead.follow_ups || []).forEach(fu => fuData.push({ lead, fu })));
+    }
+    if (isiOS) {
+      // Show inline on iPad — Safari blocks window.open
+      setReportHTML(buildReportHTML(reportTitle, leads, fuData));
+    } else {
+      printReport(reportTitle, leads, fuData);
     }
   };
 
@@ -1149,6 +1173,40 @@ function Dashboard({ user }) {
 
       {showReports && (
         <div style={{position:"fixed",inset:0,zIndex:150}} onClick={() => setShowReports(false)} />
+      )}
+
+      {/* ── Inline Report Modal (iPad) ── */}
+      {reportHTML && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:500,
+          display:"flex",alignItems:"flex-start",justifyContent:"center",
+          overflowY:"auto",padding:"16px"}}>
+          <div style={{background:"#fff",borderRadius:10,width:"100%",maxWidth:900,
+            boxShadow:"0 8px 32px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+            <div style={{background:"#3b82f6",padding:"14px 20px",display:"flex",
+              justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{color:"#fff",fontWeight:700,fontSize:16}}>KQF Discount Flooring — {reportHTML.title}</div>
+                <div style={{color:"#dbeafe",fontSize:12}}>Generated: {reportHTML.generated}</div>
+              </div>
+              <button onClick={() => setReportHTML(null)} style={{background:"#ef4444",color:"#fff",
+                border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
+            </div>
+            <div style={{overflowX:"auto",padding:"16px"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{background:"#3b82f6"}}>
+                    {["Date/Time","Type","Status","Name","Address","Phone","Notes"].map(h => (
+                      <th key={h} style={{color:"#fff",padding:"8px",textAlign:"left",
+                        whiteSpace:"nowrap",fontWeight:600}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody dangerouslySetInnerHTML={{__html: reportHTML.rows ||
+                  "<tr><td colSpan='7' style='text-align:center;padding:20px;color:#888'>No records found</td></tr>"}} />
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
