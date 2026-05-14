@@ -5,6 +5,13 @@ import { signOut } from "firebase/auth";
 const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
 const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
+
+// Firebase sometimes stores arrays as objects — normalize either way
+const normalizeFUs = (fus) => {
+  if (!fus) return [];
+  if (Array.isArray(fus)) return fus;
+  return Object.values(fus);
+};
 const STATUS_COLORS = {
   New: "#3b82f6", Contacted: "#f59e0b",
   Quoted: "#8b5cf6", Won: "#10b981", Lost: "#ef4444",
@@ -124,7 +131,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
     contractor_c2_fax: lead.contractor_c2_fax || "",
   });
   const [notes, setNotes] = useState(lead.notes || "");
-  const [followUps, setFollowUps] = useState(lead.follow_ups || []);
+  const [followUps, setFollowUps] = useState(normalizeFUs(lead.follow_ups));
   const [newFU, setNewFU] = useState({ date:"", time:"", type:"Phone Call", status:"Scheduled", notes:"" });
   const [showCal, setShowCal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -164,7 +171,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
       contractor_email2: lead.contractor_email2 || "",
     });
     setNotes(lead.notes || "");
-    setFollowUps(lead.follow_ups || []);
+    setFollowUps(normalizeFUs(lead.follow_ups));
     setDeleteConfirm(false);
     setLookupStatus("");
     setNotesTimestamped(false);
@@ -1006,9 +1013,9 @@ function Dashboard({ user }) {
     const yesterday = new Date(now.getTime() - 86400000).toISOString().split("T")[0];
     const result = [];
     leads.forEach(lead => {
-      (lead.follow_ups || []).forEach(fu => {
+      normalizeFUs(lead.follow_ups).forEach(fu => {
         if (!fu.date) return;
-        // Exclude Completed and Cancelled from all forward-looking reports; only "all" shows them
+        // Exclude Completed and Cancelled from forward-looking reports; only "all" shows them
         if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) return;
         if (filter === "today"    && fu.date !== todayStr) return;
         if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
@@ -1023,7 +1030,7 @@ function Dashboard({ user }) {
   const markFollowUpStatus = async (leadId, fuId, newStatus, newLeadStatus) => {
     const lead = leads.find(l => l.id === leadId);
     if (!lead) return;
-    const updatedFUs = (lead.follow_ups || []).map(f =>
+    const updatedFUs = normalizeFUs(lead.follow_ups).map(f =>
       f.id === fuId ? { ...f, status: newStatus } : f
     );
     const updates = { follow_ups: updatedFUs };
@@ -1036,18 +1043,13 @@ function Dashboard({ user }) {
       setReportHTML(prev => {
         if (!prev) return prev;
         if (newStatus === "Completed") {
-          // Vanish immediately from current report view
           return { ...prev, items: prev.items.filter(item =>
             !(item.lead.id === leadId && item.fu.id === fuId)
           )};
         } else {
-          // No Answer / Cancelled — update badge in place, stay visible
           return { ...prev, items: prev.items.map(item =>
             item.lead.id === leadId && item.fu.id === fuId
-              ? { ...item,
-                  fu: { ...item.fu, status: newStatus },
-                  lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) }
-                }
+              ? { ...item, fu: { ...item.fu, status: newStatus }, lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) } }
               : item
           )};
         }
@@ -1066,7 +1068,7 @@ function Dashboard({ user }) {
       reportTitle = `${type} Leads`;
       const statusLeads = leads.filter(l => (l.status || "New") === type);
       fuData = [];
-      statusLeads.forEach(lead => (lead.follow_ups || []).forEach(fu => fuData.push({ lead, fu })));
+      statusLeads.forEach(lead => normalizeFUs(lead.follow_ups).forEach(fu => fuData.push({ lead, fu })));
     }
     setReportHTML(buildReportHTML(reportTitle, leads, fuData));
   };
@@ -1274,23 +1276,15 @@ function Dashboard({ user }) {
                         </td>
                         <td style={{padding:"8px",whiteSpace:"nowrap"}}>{item.fu.type||""}</td>
                         <td style={{padding:"8px"}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                            <span style={{
-                              padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
-                              background: item.fu.status==="Completed"?"#d1fae5":
-                                item.fu.status==="Cancelled"?"#fee2e2":
-                                item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
-                              color: item.fu.status==="Completed"?"#065f46":
-                                item.fu.status==="Cancelled"?"#991b1b":
-                                item.fu.status==="No Answer"?"#92400e":"#1e40af"
-                            }}>{item.fu.status||"Scheduled"}</span>
-                            <span style={{
-                              padding:"2px 6px",borderRadius:12,fontSize:10,fontWeight:600,
-                              background: STATUS_COLORS[item.lead.status||"New"]+"22",
-                              color: STATUS_COLORS[item.lead.status||"New"],
-                              border:`1px solid ${STATUS_COLORS[item.lead.status||"New"]}44`
-                            }}>Lead: {item.lead.status||"New"}</span>
-                          </div>
+                          <span style={{
+                            padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
+                            background: item.fu.status==="Completed"?"#d1fae5":
+                              item.fu.status==="Cancelled"?"#fee2e2":
+                              item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
+                            color: item.fu.status==="Completed"?"#065f46":
+                              item.fu.status==="Cancelled"?"#991b1b":
+                              item.fu.status==="No Answer"?"#92400e":"#1e40af"
+                          }}>{item.fu.status||"Scheduled"}</span>
                         </td>
                         <td style={{padding:"8px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {item.lead.owner_name||item.lead.contractor_name||""}
