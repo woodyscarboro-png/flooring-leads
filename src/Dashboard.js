@@ -6,7 +6,7 @@ const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
 const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
 
-// Firebase sometimes stores arrays as objects — normalize either way
+// Firebase returns arrays as objects when keys aren't sequential — normalize both
 const normalizeFUs = (fus) => {
   if (!fus) return [];
   if (Array.isArray(fus)) return fus;
@@ -1005,25 +1005,29 @@ function Dashboard({ user }) {
 
   const buildFollowUps = (filter) => {
     const now = new Date();
-    // Use start of today (midnight) so today's items are never excluded
     const todayStr = now.toISOString().split("T")[0];
     const weekEnd  = new Date(now.getTime() + 7*86400000).toISOString().split("T")[0];
     const monthEnd = new Date(now.getTime() + 30*86400000).toISOString().split("T")[0];
-    // Yesterday — so "upcoming" includes items from yesterday that may not have been done yet
     const yesterday = new Date(now.getTime() - 86400000).toISOString().split("T")[0];
+    console.log("[buildFollowUps] filter:", filter, "| today:", todayStr, "| weekEnd:", weekEnd, "| leads count:", leads.length);
     const result = [];
     leads.forEach(lead => {
-      normalizeFUs(lead.follow_ups).forEach(fu => {
-        if (!fu.date) return;
-        // Exclude Completed and Cancelled from forward-looking reports; only "all" shows them
-        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) return;
-        if (filter === "today"    && fu.date !== todayStr) return;
-        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
-        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
-        if (filter === "upcoming" && fu.date < yesterday) return;
+      const fus = normalizeFUs(lead.follow_ups);
+      if (fus.length > 0) {
+        console.log("[buildFollowUps] lead:", lead.owner_name || lead.contractor_name, "| FUs:", fus.length, "| raw type:", Array.isArray(lead.follow_ups) ? "array" : typeof lead.follow_ups);
+      }
+      fus.forEach(fu => {
+        if (!fu.date) { console.log("  skip - no date"); return; }
+        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) { console.log("  skip - status:", fu.status); return; }
+        if (filter === "today"    && fu.date !== todayStr) { console.log("  skip today - fu.date:", fu.date); return; }
+        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) { console.log("  skip week - fu.date:", fu.date); return; }
+        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) { console.log("  skip month - fu.date:", fu.date); return; }
+        if (filter === "upcoming" && fu.date < yesterday) { console.log("  skip upcoming - fu.date:", fu.date); return; }
+        console.log("  INCLUDED fu.date:", fu.date, "status:", fu.status);
         result.push({ lead, fu });
       });
     });
+    console.log("[buildFollowUps] result count:", result.length);
     return result.sort((a, b) => a.fu.date > b.fu.date ? 1 : -1);
   };
 
