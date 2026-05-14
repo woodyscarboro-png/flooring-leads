@@ -1008,8 +1008,8 @@ function Dashboard({ user }) {
     leads.forEach(lead => {
       (lead.follow_ups || []).forEach(fu => {
         if (!fu.date) return;
-        // Only exclude Cancelled follow-ups from forward-looking reports
-        if (filter !== "all" && fu.status === "Cancelled") return;
+        // Exclude Completed and Cancelled from all forward-looking reports; only "all" shows them
+        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) return;
         if (filter === "today"    && fu.date !== todayStr) return;
         if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
         if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
@@ -1033,7 +1033,25 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(null); // close report so user sees updated list
+      setReportHTML(prev => {
+        if (!prev) return prev;
+        if (newStatus === "Completed") {
+          // Vanish immediately from current report view
+          return { ...prev, items: prev.items.filter(item =>
+            !(item.lead.id === leadId && item.fu.id === fuId)
+          )};
+        } else {
+          // No Answer / Cancelled — update badge in place, stay visible
+          return { ...prev, items: prev.items.map(item =>
+            item.lead.id === leadId && item.fu.id === fuId
+              ? { ...item,
+                  fu: { ...item.fu, status: newStatus },
+                  lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) }
+                }
+              : item
+          )};
+        }
+      });
     } catch(e) { console.error(e); }
   };
   const runReport = (type) => {
@@ -1145,25 +1163,31 @@ function Dashboard({ user }) {
                 onClick={() => setSelectedLeadIndex(index)}>
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <span
+                  <select
                     className="status-badge"
-                    style={{backgroundColor:STATUS_COLORS[lead.status||"New"], cursor:"pointer"}}
-                    onClick={async e => {
+                    style={{
+                      backgroundColor: STATUS_COLORS[lead.status||"New"],
+                      color:"#fff", cursor:"pointer", border:"none",
+                      borderRadius:12, padding:"2px 8px", fontSize:12,
+                      fontWeight:600, WebkitAppearance:"none", MozAppearance:"none",
+                      appearance:"none", textAlign:"center", textAlignLast:"center",
+                    }}
+                    value={lead.status || "New"}
+                    onClick={e => e.stopPropagation()}
+                    onChange={async e => {
                       e.stopPropagation();
-                      const cycle = ["New","Contacted","Quoted","Won","Lost"];
-                      const current = lead.status || "New";
-                      const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+                      const next = e.target.value;
                       try {
                         await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
                           method:"PATCH", body:JSON.stringify({status: next})
                         });
                         setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
-                      } catch(e) { console.error(e); }
+                      } catch(err) { console.error(err); }
                     }}
-                    title="Tap to change status"
+                    title="Change status"
                   >
-                    {lead.status || "New"}
-                  </span>
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div className="lead-address">{lead.property_address || "No address"}</div>
                 <div className="lead-meta">
@@ -1235,7 +1259,7 @@ function Dashboard({ user }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead style={{position:"sticky",top:0,background:"#1e40af",zIndex:9}}>
                     <tr>
-                      {["Date/Time","Type","Current Status","Name","Phone","Notes","Actions"].map(h => (
+                      {["Date/Time","Type","Follow-Up Status","Name","Phone","Notes","Actions"].map(h => (
                         <th key={h} style={{color:"#fff",padding:"10px 8px",textAlign:"left",
                           whiteSpace:"nowrap",fontWeight:600,borderBottom:"2px solid #3b82f6"}}>{h}</th>
                       ))}
@@ -1250,15 +1274,23 @@ function Dashboard({ user }) {
                         </td>
                         <td style={{padding:"8px",whiteSpace:"nowrap"}}>{item.fu.type||""}</td>
                         <td style={{padding:"8px"}}>
-                          <span style={{
-                            padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
-                            background: item.fu.status==="Completed"?"#d1fae5":
-                              item.fu.status==="Cancelled"?"#fee2e2":
-                              item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
-                            color: item.fu.status==="Completed"?"#065f46":
-                              item.fu.status==="Cancelled"?"#991b1b":
-                              item.fu.status==="No Answer"?"#92400e":"#1e40af"
-                          }}>{item.fu.status||"Scheduled"}</span>
+                          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                            <span style={{
+                              padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
+                              background: item.fu.status==="Completed"?"#d1fae5":
+                                item.fu.status==="Cancelled"?"#fee2e2":
+                                item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
+                              color: item.fu.status==="Completed"?"#065f46":
+                                item.fu.status==="Cancelled"?"#991b1b":
+                                item.fu.status==="No Answer"?"#92400e":"#1e40af"
+                            }}>{item.fu.status||"Scheduled"}</span>
+                            <span style={{
+                              padding:"2px 6px",borderRadius:12,fontSize:10,fontWeight:600,
+                              background: STATUS_COLORS[item.lead.status||"New"]+"22",
+                              color: STATUS_COLORS[item.lead.status||"New"],
+                              border:`1px solid ${STATUS_COLORS[item.lead.status||"New"]}44`
+                            }}>Lead: {item.lead.status||"New"}</span>
+                          </div>
                         </td>
                         <td style={{padding:"8px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                           {item.lead.owner_name||item.lead.contractor_name||""}
@@ -1270,21 +1302,50 @@ function Dashboard({ user }) {
                           {(item.fu.notes||"").substring(0,80)}{(item.fu.notes||"").length>80?"…":""}
                         </td>
                         <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
                             {["Completed","No Answer","Cancelled"].map(s => (
                               <button key={s}
                                 onClick={() => markFollowUpStatus(
                                   item.lead.id, item.fu.id, s,
                                   s==="Completed" ? "Contacted" : undefined
                                 )}
+                                disabled={item.fu.status === s}
                                 style={{
                                   padding:"4px 8px",fontSize:11,border:"none",borderRadius:4,
-                                  cursor:"pointer",fontWeight:600,
+                                  cursor: item.fu.status === s ? "default" : "pointer",fontWeight:600,
+                                  opacity: item.fu.status === s ? 0.45 : 1,
                                   background: s==="Completed"?"#10b981":s==="No Answer"?"#f59e0b":"#ef4444",
                                   color:"#fff"
                                 }}>{s}</button>
                             ))}
                           </div>
+                          <select
+                            value={item.lead.status||"New"}
+                            onChange={async e => {
+                              const next = e.target.value;
+                              try {
+                                await fetch(`${RTDB_URL}/leads/${item.lead.id}.json`, {
+                                  method:"PATCH", body:JSON.stringify({status: next})
+                                });
+                                setLeads(prev => prev.map(l => l.id === item.lead.id ? {...l, status: next} : l));
+                                setReportHTML(prev => {
+                                  if (!prev) return prev;
+                                  return { ...prev, items: prev.items.map(it =>
+                                    it.lead.id === item.lead.id ? { ...it, lead: { ...it.lead, status: next } } : it
+                                  )};
+                                });
+                              } catch(err) { console.error(err); }
+                            }}
+                            style={{
+                              fontSize:11,padding:"3px 6px",borderRadius:4,
+                              border:`1px solid ${STATUS_COLORS[item.lead.status||"New"]}`,
+                              background: STATUS_COLORS[item.lead.status||"New"]+"18",
+                              color: STATUS_COLORS[item.lead.status||"New"],
+                              fontWeight:600,cursor:"pointer",width:"100%"
+                            }}
+                          >
+                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>Lead → {s}</option>)}
+                          </select>
                         </td>
                       </tr>
                     ))}
