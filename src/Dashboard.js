@@ -6,7 +6,7 @@ const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
 const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
 
-// Firebase returns arrays as objects when keys aren't sequential — normalize both
+// Firebase stores arrays as objects — normalize to array always
 const normalizeFUs = (fus) => {
   if (!fus) return [];
   if (Array.isArray(fus)) return fus;
@@ -703,22 +703,7 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               <div style={{background:"#f8f9fa",borderRadius:8,padding:14,marginBottom:20}}>
                 <div style={{position:"relative",marginBottom:8}}>
                   <label style={lbl}>Date</label>
-                  <input readOnly
-                    value={newFU.date ? (() => {
-                      const [y,m,d] = newFU.date.split("-").map(Number);
-                      const dt = new Date(y, m-1, d);
-                      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-                      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-                      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
-                      if (newFU.time) {
-                        const [h, min] = newFU.time.split(":").map(Number);
-                        const ampm = h >= 12 ? "PM" : "AM";
-                        const hour = h % 12 || 12;
-                        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
-                      }
-                      return result;
-                    })() : ""}
-                    onClick={() => setShowCal(!showCal)}
+                  <input readOnly value={newFU.date} onClick={() => setShowCal(!showCal)}
                     placeholder="Click to select date"
                     style={{...inp, cursor:"pointer", background:"#fff"}} />
                   {showCal && (
@@ -1005,29 +990,25 @@ function Dashboard({ user }) {
 
   const buildFollowUps = (filter) => {
     const now = new Date();
+    // Use start of today (midnight) so today's items are never excluded
     const todayStr = now.toISOString().split("T")[0];
     const weekEnd  = new Date(now.getTime() + 7*86400000).toISOString().split("T")[0];
     const monthEnd = new Date(now.getTime() + 30*86400000).toISOString().split("T")[0];
+    // Yesterday — so "upcoming" includes items from yesterday that may not have been done yet
     const yesterday = new Date(now.getTime() - 86400000).toISOString().split("T")[0];
-    console.log("[buildFollowUps] filter:", filter, "| today:", todayStr, "| weekEnd:", weekEnd, "| leads count:", leads.length);
     const result = [];
     leads.forEach(lead => {
-      const fus = normalizeFUs(lead.follow_ups);
-      if (fus.length > 0) {
-        console.log("[buildFollowUps] lead:", lead.owner_name || lead.contractor_name, "| FUs:", fus.length, "| raw type:", Array.isArray(lead.follow_ups) ? "array" : typeof lead.follow_ups);
-      }
-      fus.forEach(fu => {
-        if (!fu.date) { console.log("  skip - no date"); return; }
-        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) { console.log("  skip - status:", fu.status); return; }
-        if (filter === "today"    && fu.date !== todayStr) { console.log("  skip today - fu.date:", fu.date); return; }
-        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) { console.log("  skip week - fu.date:", fu.date); return; }
-        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) { console.log("  skip month - fu.date:", fu.date); return; }
-        if (filter === "upcoming" && fu.date < yesterday) { console.log("  skip upcoming - fu.date:", fu.date); return; }
-        console.log("  INCLUDED fu.date:", fu.date, "status:", fu.status);
+      normalizeFUs(lead.follow_ups).forEach(fu => {
+        if (!fu.date) return;
+        // Only exclude Cancelled follow-ups from forward-looking reports
+        if (filter !== "all" && fu.status === "Cancelled") return;
+        if (filter === "today"    && fu.date !== todayStr) return;
+        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
+        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
+        if (filter === "upcoming" && fu.date < yesterday) return;
         result.push({ lead, fu });
       });
     });
-    console.log("[buildFollowUps] result count:", result.length);
     return result.sort((a, b) => a.fu.date > b.fu.date ? 1 : -1);
   };
 
@@ -1044,20 +1025,7 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(prev => {
-        if (!prev) return prev;
-        if (newStatus === "Completed") {
-          return { ...prev, items: prev.items.filter(item =>
-            !(item.lead.id === leadId && item.fu.id === fuId)
-          )};
-        } else {
-          return { ...prev, items: prev.items.map(item =>
-            item.lead.id === leadId && item.fu.id === fuId
-              ? { ...item, fu: { ...item.fu, status: newStatus }, lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) } }
-              : item
-          )};
-        }
-      });
+      setReportHTML(null); // close report so user sees updated list
     } catch(e) { console.error(e); }
   };
   const runReport = (type) => {
@@ -1169,31 +1137,25 @@ function Dashboard({ user }) {
                 onClick={() => setSelectedLeadIndex(index)}>
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <select
+                  <span
                     className="status-badge"
-                    style={{
-                      backgroundColor: STATUS_COLORS[lead.status||"New"],
-                      color:"#fff", cursor:"pointer", border:"none",
-                      borderRadius:12, padding:"2px 8px", fontSize:12,
-                      fontWeight:600, WebkitAppearance:"none", MozAppearance:"none",
-                      appearance:"none", textAlign:"center", textAlignLast:"center",
-                    }}
-                    value={lead.status || "New"}
-                    onClick={e => e.stopPropagation()}
-                    onChange={async e => {
+                    style={{backgroundColor:STATUS_COLORS[lead.status||"New"], cursor:"pointer"}}
+                    onClick={async e => {
                       e.stopPropagation();
-                      const next = e.target.value;
+                      const cycle = ["New","Contacted","Quoted","Won","Lost"];
+                      const current = lead.status || "New";
+                      const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
                       try {
                         await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
                           method:"PATCH", body:JSON.stringify({status: next})
                         });
                         setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
-                      } catch(err) { console.error(err); }
+                      } catch(e) { console.error(e); }
                     }}
-                    title="Change status"
+                    title="Tap to change status"
                   >
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    {lead.status || "New"}
+                  </span>
                 </div>
                 <div className="lead-address">{lead.property_address || "No address"}</div>
                 <div className="lead-meta">
@@ -1265,7 +1227,7 @@ function Dashboard({ user }) {
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead style={{position:"sticky",top:0,background:"#1e40af",zIndex:9}}>
                     <tr>
-                      {["Date/Time","Type","Follow-Up Status","Name","Phone","Notes","Actions"].map(h => (
+                      {["Date/Time","Type","Current Status","Name","Phone","Notes","Actions"].map(h => (
                         <th key={h} style={{color:"#fff",padding:"10px 8px",textAlign:"left",
                           whiteSpace:"nowrap",fontWeight:600,borderBottom:"2px solid #3b82f6"}}>{h}</th>
                       ))}
@@ -1300,50 +1262,21 @@ function Dashboard({ user }) {
                           {(item.fu.notes||"").substring(0,80)}{(item.fu.notes||"").length>80?"…":""}
                         </td>
                         <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
+                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                             {["Completed","No Answer","Cancelled"].map(s => (
                               <button key={s}
                                 onClick={() => markFollowUpStatus(
                                   item.lead.id, item.fu.id, s,
                                   s==="Completed" ? "Contacted" : undefined
                                 )}
-                                disabled={item.fu.status === s}
                                 style={{
                                   padding:"4px 8px",fontSize:11,border:"none",borderRadius:4,
-                                  cursor: item.fu.status === s ? "default" : "pointer",fontWeight:600,
-                                  opacity: item.fu.status === s ? 0.45 : 1,
+                                  cursor:"pointer",fontWeight:600,
                                   background: s==="Completed"?"#10b981":s==="No Answer"?"#f59e0b":"#ef4444",
                                   color:"#fff"
                                 }}>{s}</button>
                             ))}
                           </div>
-                          <select
-                            value={item.lead.status||"New"}
-                            onChange={async e => {
-                              const next = e.target.value;
-                              try {
-                                await fetch(`${RTDB_URL}/leads/${item.lead.id}.json`, {
-                                  method:"PATCH", body:JSON.stringify({status: next})
-                                });
-                                setLeads(prev => prev.map(l => l.id === item.lead.id ? {...l, status: next} : l));
-                                setReportHTML(prev => {
-                                  if (!prev) return prev;
-                                  return { ...prev, items: prev.items.map(it =>
-                                    it.lead.id === item.lead.id ? { ...it, lead: { ...it.lead, status: next } } : it
-                                  )};
-                                });
-                              } catch(err) { console.error(err); }
-                            }}
-                            style={{
-                              fontSize:11,padding:"3px 6px",borderRadius:4,
-                              border:`1px solid ${STATUS_COLORS[item.lead.status||"New"]}`,
-                              background: STATUS_COLORS[item.lead.status||"New"]+"18",
-                              color: STATUS_COLORS[item.lead.status||"New"],
-                              fontWeight:600,cursor:"pointer",width:"100%"
-                            }}
-                          >
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>Lead → {s}</option>)}
-                          </select>
                         </td>
                       </tr>
                     ))}
