@@ -1130,7 +1130,23 @@ function Dashboard({ user }) {
                 onClick={() => setSelectedLeadIndex(index)}>
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <span className="status-badge" style={{backgroundColor:STATUS_COLORS[lead.status||"New"]}}>
+                  <span
+                    className="status-badge"
+                    style={{backgroundColor:STATUS_COLORS[lead.status||"New"], cursor:"pointer"}}
+                    onClick={async e => {
+                      e.stopPropagation();
+                      const cycle = ["New","Contacted","Quoted","Won","Lost"];
+                      const current = lead.status || "New";
+                      const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+                      try {
+                        await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
+                          method:"PATCH", body:JSON.stringify({status: next})
+                        });
+                        setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
+                      } catch(e) { console.error(e); }
+                    }}
+                    title="Tap to change status"
+                  >
                     {lead.status || "New"}
                   </span>
                 </div>
