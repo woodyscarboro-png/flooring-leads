@@ -696,7 +696,22 @@ function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, h
               <div style={{background:"#f8f9fa",borderRadius:8,padding:14,marginBottom:20}}>
                 <div style={{position:"relative",marginBottom:8}}>
                   <label style={lbl}>Date</label>
-                  <input readOnly value={newFU.date} onClick={() => setShowCal(!showCal)}
+                  <input readOnly
+                    value={newFU.date ? (() => {
+                      const [y,m,d] = newFU.date.split("-").map(Number);
+                      const dt = new Date(y, m-1, d);
+                      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+                      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
+                      if (newFU.time) {
+                        const [h, min] = newFU.time.split(":").map(Number);
+                        const ampm = h >= 12 ? "PM" : "AM";
+                        const hour = h % 12 || 12;
+                        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
+                      }
+                      return result;
+                    })() : ""}
+                    onClick={() => setShowCal(!showCal)}
                     placeholder="Click to select date"
                     style={{...inp, cursor:"pointer", background:"#fff"}} />
                   {showCal && (
@@ -993,8 +1008,8 @@ function Dashboard({ user }) {
     leads.forEach(lead => {
       (lead.follow_ups || []).forEach(fu => {
         if (!fu.date) return;
-        // Exclude Completed and Cancelled from all forward-looking reports; only "all" shows them
-        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) return;
+        // Only exclude Cancelled follow-ups from forward-looking reports
+        if (filter !== "all" && fu.status === "Cancelled") return;
         if (filter === "today"    && fu.date !== todayStr) return;
         if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
         if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
@@ -1018,25 +1033,7 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(prev => {
-        if (!prev) return prev;
-        if (newStatus === "Completed") {
-          // Vanish immediately from current report view
-          return { ...prev, items: prev.items.filter(item =>
-            !(item.lead.id === leadId && item.fu.id === fuId)
-          )};
-        } else {
-          // No Answer / Cancelled — update badge in place, stay visible
-          return { ...prev, items: prev.items.map(item =>
-            item.lead.id === leadId && item.fu.id === fuId
-              ? { ...item,
-                  fu: { ...item.fu, status: newStatus },
-                  lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) }
-                }
-              : item
-          )};
-        }
-      });
+      setReportHTML(null); // close report so user sees updated list
     } catch(e) { console.error(e); }
   };
   const runReport = (type) => {
@@ -1148,31 +1145,25 @@ function Dashboard({ user }) {
                 onClick={() => setSelectedLeadIndex(index)}>
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <select
+                  <span
                     className="status-badge"
-                    style={{
-                      backgroundColor: STATUS_COLORS[lead.status||"New"],
-                      color:"#fff", cursor:"pointer", border:"none",
-                      borderRadius:12, padding:"2px 8px", fontSize:12,
-                      fontWeight:600, WebkitAppearance:"none", MozAppearance:"none",
-                      appearance:"none", textAlign:"center", textAlignLast:"center",
-                    }}
-                    value={lead.status || "New"}
-                    onClick={e => e.stopPropagation()}
-                    onChange={async e => {
+                    style={{backgroundColor:STATUS_COLORS[lead.status||"New"], cursor:"pointer"}}
+                    onClick={async e => {
                       e.stopPropagation();
-                      const next = e.target.value;
+                      const cycle = ["New","Contacted","Quoted","Won","Lost"];
+                      const current = lead.status || "New";
+                      const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
                       try {
                         await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
                           method:"PATCH", body:JSON.stringify({status: next})
                         });
                         setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
-                      } catch(err) { console.error(err); }
+                      } catch(e) { console.error(e); }
                     }}
-                    title="Change status"
+                    title="Tap to change status"
                   >
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                    {lead.status || "New"}
+                  </span>
                 </div>
                 <div className="lead-address">{lead.property_address || "No address"}</div>
                 <div className="lead-meta">
