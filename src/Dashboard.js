@@ -993,8 +993,8 @@ function Dashboard({ user }) {
     leads.forEach(lead => {
       (lead.follow_ups || []).forEach(fu => {
         if (!fu.date) return;
-        // Only exclude Cancelled follow-ups from forward-looking reports
-        if (filter !== "all" && fu.status === "Cancelled") return;
+        // Exclude Completed and Cancelled from all forward-looking reports; only "all" shows them
+        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) return;
         if (filter === "today"    && fu.date !== todayStr) return;
         if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) return;
         if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) return;
@@ -1018,7 +1018,25 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(null); // close report so user sees updated list
+      setReportHTML(prev => {
+        if (!prev) return prev;
+        if (newStatus === "Completed") {
+          // Vanish immediately from current report view
+          return { ...prev, items: prev.items.filter(item =>
+            !(item.lead.id === leadId && item.fu.id === fuId)
+          )};
+        } else {
+          // No Answer / Cancelled — update badge in place, stay visible
+          return { ...prev, items: prev.items.map(item =>
+            item.lead.id === leadId && item.fu.id === fuId
+              ? { ...item,
+                  fu: { ...item.fu, status: newStatus },
+                  lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) }
+                }
+              : item
+          )};
+        }
+      });
     } catch(e) { console.error(e); }
   };
   const runReport = (type) => {
@@ -1130,25 +1148,31 @@ function Dashboard({ user }) {
                 onClick={() => setSelectedLeadIndex(index)}>
                 <div className="lead-card-top">
                   <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <span
+                  <select
                     className="status-badge"
-                    style={{backgroundColor:STATUS_COLORS[lead.status||"New"], cursor:"pointer"}}
-                    onClick={async e => {
+                    style={{
+                      backgroundColor: STATUS_COLORS[lead.status||"New"],
+                      color:"#fff", cursor:"pointer", border:"none",
+                      borderRadius:12, padding:"2px 8px", fontSize:12,
+                      fontWeight:600, WebkitAppearance:"none", MozAppearance:"none",
+                      appearance:"none", textAlign:"center", textAlignLast:"center",
+                    }}
+                    value={lead.status || "New"}
+                    onClick={e => e.stopPropagation()}
+                    onChange={async e => {
                       e.stopPropagation();
-                      const cycle = ["New","Contacted","Quoted","Won","Lost"];
-                      const current = lead.status || "New";
-                      const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+                      const next = e.target.value;
                       try {
                         await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
                           method:"PATCH", body:JSON.stringify({status: next})
                         });
                         setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
-                      } catch(e) { console.error(e); }
+                      } catch(err) { console.error(err); }
                     }}
-                    title="Tap to change status"
+                    title="Change status"
                   >
-                    {lead.status || "New"}
-                  </span>
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div className="lead-address">{lead.property_address || "No address"}</div>
                 <div className="lead-meta">
