@@ -1055,6 +1055,7 @@ function Dashboard({ user }) {
       fuData = [];
       statusLeads.forEach(lead => normalizeFUs(lead.follow_ups).forEach(fu => fuData.push({ lead, fu })));
     }
+    alert("Report: " + reportTitle + " | Leads loaded: " + leads.length + " | Records found: " + fuData.length);
     setReportHTML(buildReportHTML(reportTitle, leads, fuData));
   };
 
