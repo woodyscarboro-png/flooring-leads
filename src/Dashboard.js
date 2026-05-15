@@ -911,29 +911,6 @@ function AddProspectModal({ onClose, onSave }) {
   );
 }
 
-// ── Reports ────────────────────────────────────────────────────────────────────
-  const fmtReportDate = (dateStr, timeStr) => {
-    if (!dateStr) return "";
-    try {
-      const [y,m,d] = dateStr.split("-").map(Number);
-      const dt = new Date(y, m-1, d);
-      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
-      if (timeStr) {
-        const [h, min] = timeStr.split(":").map(Number);
-        const ampm = h >= 12 ? "PM" : "AM";
-        const hour = h % 12 || 12;
-        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
-      }
-      return result;
-    } catch(e) { return `${dateStr} ${timeStr||""}`; }
-  };
-
-function buildReportHTML(title, leads, followUps) {
-  return { title, items: followUps, generated: new Date().toLocaleString() };
-}
-
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 function Dashboard({ user }) {
   const [leads, setLeads] = useState([]);
@@ -943,8 +920,6 @@ function Dashboard({ user }) {
   const [filterStatus, setFilterStatus] = useState("All");
   const [selectedLeadIndex, setSelectedLeadIndex] = useState(null);
   const [showAddProspect, setShowAddProspect] = useState(false);
-  const [showReports, setShowReports] = useState(false);
-  const [reportHTML, setReportHTML] = useState(null);
   const [counties, setCounties] = useState([]);
 
   const fetchLeads = useCallback(async () => {
@@ -1025,25 +1000,9 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(null); // close report so user sees updated list
     } catch(e) { console.error(e); }
   };
-  const runReport = (type) => {
-    setShowReports(false);
-    let fuData, reportTitle;
-    if (["today","week","month","upcoming","all"].includes(type)) {
-      const labels = { today:"Today's Follow-Ups", week:"This Week's Follow-Ups",
-        month:"This Month's Follow-Ups", upcoming:"All Upcoming Follow-Ups", all:"All Follow-Ups Ever" };
-      reportTitle = labels[type];
-      fuData = buildFollowUps(type);
-    } else {
-      reportTitle = `${type} Leads`;
-      const statusLeads = leads.filter(l => (l.status || "New") === type);
-      fuData = [];
-      statusLeads.forEach(lead => normalizeFUs(lead.follow_ups).forEach(fu => fuData.push({ lead, fu })));
-    }
-    setReportHTML(buildReportHTML(reportTitle, leads, fuData));
-  };
+
 
   const stats = {
     total: leads.length,
@@ -1091,34 +1050,6 @@ function Dashboard({ user }) {
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <button className="refresh-btn" onClick={fetchLeads}>Refresh</button>
-        <div style={{position:"relative"}}>
-          <button onClick={() => setShowReports(r => !r)} style={{
-            background:"#8b5cf6",color:"#fff",border:"none",
-            borderRadius:5,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-          }}>📊 Reports</button>
-          {showReports && (
-            <div style={{position:"absolute",top:"100%",right:0,background:"#fff",
-              border:"1px solid #ddd",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-              zIndex:200,minWidth:220,overflow:"hidden"}}>
-              {[
-                {key:"today",label:"Today's Follow-Ups"},{key:"week",label:"This Week's Follow-Ups"},
-                {key:"month",label:"This Month's Follow-Ups"},{key:"upcoming",label:"All Upcoming Follow-Ups"},
-                {key:"all",label:"All Follow-Ups Ever"},{key:"New",label:"New Leads"},
-                {key:"Contacted",label:"Contacted Leads"},{key:"Quoted",label:"Quoted Leads"},
-                {key:"Won",label:"Won Leads"},{key:"Lost",label:"Lost Leads"},
-              ].map(r => (
-                <button key={r.key} onClick={() => runReport(r.key)} style={{
-                  display:"block",width:"100%",padding:"10px 16px",background:"none",
-                  border:"none",textAlign:"left",cursor:"pointer",fontSize:13,color:"#222",
-                  borderBottom:"1px solid #f0f0f0"
-                }}
-                  onMouseEnter={e => e.target.style.background="#f5f3ff"}
-                  onMouseLeave={e => e.target.style.background="none"}
-                >{r.label}</button>
-              ))}
-            </div>
-          )}
-        </div>
         <button onClick={() => setShowAddProspect(true)} style={{
           background:"#10b981",color:"#fff",border:"none",
           borderRadius:5,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
@@ -1200,93 +1131,7 @@ function Dashboard({ user }) {
         <AddProspectModal onClose={() => setShowAddProspect(false)} onSave={handleAddProspect} />
       )}
 
-      {showReports && (
-        <div style={{position:"fixed",inset:0,zIndex:150}} onClick={() => setShowReports(false)} />
-      )}
 
-      {/* ── Inline Report Modal (iPad + interactive) ── */}
-      {reportHTML && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:500,
-          display:"flex",alignItems:"flex-start",justifyContent:"center",
-          overflowY:"auto",padding:"16px"}}>
-          <div style={{background:"#fff",borderRadius:10,width:"100%",maxWidth:960,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.3)",overflow:"hidden"}}>
-            <div style={{background:"#3b82f6",padding:"14px 20px",display:"flex",
-              justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
-              <div>
-                <div style={{color:"#fff",fontWeight:700,fontSize:16}}>KQF Discount Flooring — {reportHTML.title}</div>
-                <div style={{color:"#dbeafe",fontSize:12}}>Generated: {reportHTML.generated} &nbsp;|&nbsp; {reportHTML.items.length} records</div>
-              </div>
-              <button onClick={() => setReportHTML(null)} style={{background:"#ef4444",color:"#fff",
-                border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
-            </div>
-            {reportHTML.items.length === 0 ? (
-              <div style={{padding:40,textAlign:"center",color:"#888",fontSize:16}}>No records found for this report.</div>
-            ) : (
-              <div style={{overflowX:"auto",padding:"0 0 16px"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead style={{position:"sticky",top:0,background:"#1e40af",zIndex:9}}>
-                    <tr>
-                      {["Date/Time","Type","Current Status","Name","Phone","Notes","Actions"].map(h => (
-                        <th key={h} style={{color:"#fff",padding:"10px 8px",textAlign:"left",
-                          whiteSpace:"nowrap",fontWeight:600,borderBottom:"2px solid #3b82f6"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportHTML.items.map((item, i) => (
-                      <tr key={i} style={{background: i%2===0?"#fff":"#f8fafc",
-                        borderBottom:"1px solid #e5e7eb"}}>
-                        <td style={{padding:"8px",whiteSpace:"nowrap",color:"#374151"}}>
-                          {fmtReportDate(item.fu.date, item.fu.time)}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>{item.fu.type||""}</td>
-                        <td style={{padding:"8px"}}>
-                          <span style={{
-                            padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
-                            background: item.fu.status==="Completed"?"#d1fae5":
-                              item.fu.status==="Cancelled"?"#fee2e2":
-                              item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
-                            color: item.fu.status==="Completed"?"#065f46":
-                              item.fu.status==="Cancelled"?"#991b1b":
-                              item.fu.status==="No Answer"?"#92400e":"#1e40af"
-                          }}>{item.fu.status||"Scheduled"}</span>
-                        </td>
-                        <td style={{padding:"8px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {item.lead.owner_name||item.lead.contractor_name||""}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          {item.lead.owner_phone||item.lead.contractor_phone||""}
-                        </td>
-                        <td style={{padding:"8px",maxWidth:200,color:"#555",fontSize:12}}>
-                          {(item.fu.notes||"").substring(0,80)}{(item.fu.notes||"").length>80?"…":""}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                            {["Completed","No Answer","Cancelled"].map(s => (
-                              <button key={s}
-                                onClick={() => markFollowUpStatus(
-                                  item.lead.id, item.fu.id, s,
-                                  s==="Completed" ? "Contacted" : undefined
-                                )}
-                                style={{
-                                  padding:"4px 8px",fontSize:11,border:"none",borderRadius:4,
-                                  cursor:"pointer",fontWeight:600,
-                                  background: s==="Completed"?"#10b981":s==="No Answer"?"#f59e0b":"#ef4444",
-                                  color:"#fff"
-                                }}>{s}</button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
