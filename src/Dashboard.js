@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
 
-const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com"; // v2
+const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
 const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
 
@@ -1025,20 +1025,7 @@ function Dashboard({ user }) {
         method: "PATCH", body: JSON.stringify(updates)
       });
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(prev => {
-        if (!prev) return prev;
-        if (newStatus === "Completed") {
-          return { ...prev, items: prev.items.filter(item =>
-            !(item.lead.id === leadId && item.fu.id === fuId)
-          )};
-        } else {
-          return { ...prev, items: prev.items.map(item =>
-            item.lead.id === leadId && item.fu.id === fuId
-              ? { ...item, fu: { ...item.fu, status: newStatus }, lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) } }
-              : item
-          )};
-        }
-      });
+      setReportHTML(null); // close report so user sees updated list
     } catch(e) { console.error(e); }
   };
   const runReport = (type) => {
@@ -1055,7 +1042,6 @@ function Dashboard({ user }) {
       fuData = [];
       statusLeads.forEach(lead => normalizeFUs(lead.follow_ups).forEach(fu => fuData.push({ lead, fu })));
     }
-    alert("Report: " + reportTitle + " | Leads loaded: " + leads.length + " | Records found: " + fuData.length);
     setReportHTML(buildReportHTML(reportTitle, leads, fuData));
   };
 
