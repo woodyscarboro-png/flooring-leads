@@ -1,0 +1,1 @@
+V2 update: Login title changed to Woodys Lead Program. Lead edit modal rebuilt to better match the desktop app edit window item-for-item: Lead Category, Lead Status, Owner / Property Contact, Owner Second Contact, Contractor, Contractor Contact #1, extra contractor contacts, Permit / Source Details, Notes, Schedule Follow-Up, Follow-Up History, and Lead Summary.

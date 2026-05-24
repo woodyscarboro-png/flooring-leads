@@ -1,1361 +1,1469 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { auth } from "./firebase";
-import { signOut } from "firebase/auth";
 
-const RTDB_URL = "https://kqf-lead-generation-default-rtdb.firebaseio.com";
-const PLACES_API_KEY = "AIzaSyCBguEuPKEaiKgusoNZ6Lwp7D0Up4hxoP4";
-const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost"];
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "./supabaseClient";
 
-// Firebase returns arrays as objects when keys aren't sequential — normalize both
-const normalizeFUs = (fus) => {
-  if (!fus) return [];
-  if (Array.isArray(fus)) return fus;
-  return Object.values(fus);
-};
+const PAGE_SIZE = 5000;
+
+const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost", "Not Responding"];
+const FOLLOW_UP_TYPES = ["Phone Call", "Email", "In-Person Visit", "Text Message", "Other"];
+const FOLLOW_UP_STATUSES = ["Scheduled", "Completed", "Cancelled", "No Answer"];
+
+const COMMON_CATEGORIES = [
+  "All",
+  "apartment_complex",
+  "builder",
+  "commercial_property",
+  "damage_repair",
+  "hoa_condo",
+  "licensed_contractor",
+  "new_home_owner",
+  "property_manager",
+  "rental_llc",
+  "renovation_permit",
+  "senior_living",
+];
+
+const COMMON_COUNTIES = [
+  "All", "Alamance", "Caswell", "Chatham", "Davidson", "Davie", "Durham",
+  "Forsyth", "Guilford", "Lee", "Montgomery", "Moore", "Orange",
+  "Randolph", "Richmond", "Rockingham", "Rowan", "Stanly", "Yadkin"
+];
+
 const STATUS_COLORS = {
-  New: "#3b82f6", Contacted: "#f59e0b",
-  Quoted: "#8b5cf6", Won: "#10b981", Lost: "#ef4444",
+  New: "#3b82f6",
+  Contacted: "#f59e0b",
+  Quoted: "#8b5cf6",
+  Won: "#10b981",
+  Lost: "#ef4444",
+  "Not Responding": "#64748b",
 };
 
-const calNavBtn = {
-  background:"none", border:"1px solid #ddd", borderRadius:4,
-  padding:"2px 6px", cursor:"pointer", fontSize:12
+const fieldStyle = {
+  width: "100%",
+  padding: "7px 9px",
+  border: "1px solid #d7dee8",
+  borderRadius: 5,
+  fontSize: 13,
+  boxSizing: "border-box",
 };
 
-// ── Calendar Picker ────────────────────────────────────────────────────────────
-function CalendarPicker({ value, onChange, onClose }) {
-  const today = new Date();
-  const initial = value ? new Date(value) : today;
-  const [viewYear, setViewYear] = useState(initial.getFullYear());
-  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+const labelStyle = {
+  fontSize: 12,
+  color: "#41546b",
+  fontWeight: 700,
+  marginBottom: 3,
+  display: "block",
+};
 
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const monthNames = ["January","February","March","April","May","June",
-    "July","August","September","October","November","December"];
-
-  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1); } else setViewMonth(m => m-1); };
-  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1); } else setViewMonth(m => m+1); };
-  const prevYear = () => setViewYear(y => y-1);
-  const nextYear = () => setViewYear(y => y+1);
-
-  const selectDay = (day) => {
-    const d = new Date(viewYear, viewMonth, day);
-    onChange(d.toISOString().split("T")[0]);
-    onClose();
-  };
-
-  const selectedStr = value;
-  const todayStr = today.toISOString().split("T")[0];
-  const cells = [];
-  for (let i = 0; i < firstDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  return (
-    <div onClick={e => e.stopPropagation()} style={{
-      background:"#fff", border:"1px solid #ddd", borderRadius:8,
-      padding:12, width:280, boxShadow:"0 4px 16px rgba(0,0,0,0.15)", userSelect:"none"
-    }}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-        <button onClick={prevYear} style={calNavBtn}>{"<<"}</button>
-        <button onClick={prevMonth} style={calNavBtn}>{"<"}</button>
-        <span style={{fontWeight:600,fontSize:14}}>{monthNames[viewMonth]} {viewYear}</span>
-        <button onClick={nextMonth} style={calNavBtn}>{">"}</button>
-        <button onClick={nextYear} style={calNavBtn}>{">>"}</button>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
-        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
-          <div key={d} style={{fontSize:11,fontWeight:600,color:"#888",padding:"2px 0"}}>{d}</div>
-        ))}
-        {cells.map((day, i) => {
-          if (!day) return <div key={i} />;
-          const ds = `${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-          const isSelected = ds === selectedStr;
-          const isToday = ds === todayStr;
-          return (
-            <div key={i} onClick={() => selectDay(day)} style={{
-              padding:"4px 0", borderRadius:4, cursor:"pointer", fontSize:13,
-              background: isSelected ? "#3b82f6" : isToday ? "#dbeafe" : "transparent",
-              color: isSelected ? "#fff" : "#222",
-              fontWeight: isToday ? 700 : 400,
-            }}>{day}</div>
-          );
-        })}
-      </div>
-      <div style={{textAlign:"center",marginTop:8}}>
-        <button onClick={onClose} style={{fontSize:12,color:"#888",background:"none",border:"none",cursor:"pointer"}}>
-          Close without selecting
-        </button>
-      </div>
-    </div>
-  );
+function displayCategory(value) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-// ── Lead Modal ─────────────────────────────────────────────────────────────────
-function LeadModal({ lead, onClose, onSave, onDelete, onPrev, onNext, hasPrev, hasNext }) {
-  const [activeTab, setActiveTab] = useState("edit");
-  const [form, setForm] = useState({
+function formatDateTime(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return String(value);
+  }
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dateDaysFromNow(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function cleanPhone(phone) {
+  return String(phone || "").replace(/[^\d+]/g, "");
+}
+
+function getLeadName(lead) {
+  return lead.lead_name || lead.owner_name || lead.contractor_name || lead.property_address || "Unnamed Lead";
+}
+
+function getLeadPhone(lead) {
+  return lead.property_manager_phone || lead.owner_phone || lead.contractor_phone || "";
+}
+
+function getLeadEmail(lead) {
+  return lead.property_manager_email || lead.owner_email || lead.contractor_email || "";
+}
+
+function getLeadWebsite(lead) {
+  return lead.owner_website || lead.contractor_website || "";
+}
+
+function safeExtraContacts(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function leadToForm(lead) {
+  return {
+    lead_name: lead.lead_name || "",
+    lead_category: lead.lead_category || "",
+    lead_status: lead.lead_status || lead.status || "New",
+    lead_score: lead.lead_score || "",
+
     owner_name: lead.owner_name || "",
-    mailing_address: lead.mailing_address || "",
-    owner_city: lead.owner_city || "",
-    owner_state: lead.owner_state || "NC",
-    owner_zip: lead.owner_zip || "",
-    owner_phone: lead.owner_phone || "",
-    owner_email: lead.owner_email || "",
+    owner_first_name: lead.owner_first_name || "",
+    owner_mi: lead.owner_mi || "",
+    owner_last_name: lead.owner_last_name || "",
+    owner_mailing_address: lead.owner_mailing_address || lead.mailing_address || "",
+    property_manager_phone: lead.property_manager_phone || lead.owner_phone || "",
+    property_manager_email: lead.property_manager_email || lead.owner_email || "",
+    owner_website: lead.owner_website || "",
     owner_fax: lead.owner_fax || "",
+
+    owner_contact2_first_name: lead.owner_contact2_first_name || "",
+    owner_contact2_mi: lead.owner_contact2_mi || "",
+    owner_contact2_last_name: lead.owner_contact2_last_name || "",
+    owner_contact2_name: lead.owner_contact2_name || "",
+    owner_contact2_title: lead.owner_contact2_title || "",
+    owner_phone2: lead.owner_phone2 || "",
+    owner_email2: lead.owner_email2 || "",
+
     property_address: lead.property_address || "",
     county: lead.county || "",
+    city: lead.city || "",
+    state: lead.state || "NC",
+    zip: lead.zip || "",
+
     contractor_name: lead.contractor_name || "",
+    contractor_owner_first_name: lead.contractor_owner_first_name || "",
+    contractor_owner_mi: lead.contractor_owner_mi || "",
+    contractor_owner_last_name: lead.contractor_owner_last_name || "",
     contractor_address: lead.contractor_address || "",
     contractor_city: lead.contractor_city || "",
     contractor_state: lead.contractor_state || "NC",
     contractor_zip: lead.contractor_zip || "",
     contractor_phone: lead.contractor_phone || lead.phone || "",
     contractor_email: lead.contractor_email || "",
+    contractor_website: lead.contractor_website || "",
     contractor_fax: lead.contractor_fax || "",
-    // Second contacts
-    owner_contact2_name: lead.owner_contact2_name || "",
-    owner_contact2_title: lead.owner_contact2_title || "",
-    owner_phone2: lead.owner_phone2 || "",
-    owner_email2: lead.owner_email2 || "",
+
+    contractor_contact2_first_name: lead.contractor_contact2_first_name || "",
+    contractor_contact2_mi: lead.contractor_contact2_mi || "",
+    contractor_contact2_last_name: lead.contractor_contact2_last_name || "",
     contractor_contact2_name: lead.contractor_contact2_name || "",
     contractor_contact2_title: lead.contractor_contact2_title || "",
     contractor_phone2: lead.contractor_phone2 || "",
     contractor_email2: lead.contractor_email2 || "",
-    contractor_mailing_address: lead.contractor_mailing_address || "",
-    contractor_c2_address: lead.contractor_c2_address || "",
-    contractor_c2_mailing: lead.contractor_c2_mailing || "",
-    contractor_c2_city: lead.contractor_c2_city || "",
-    contractor_c2_state: lead.contractor_c2_state || "NC",
-    contractor_c2_zip: lead.contractor_c2_zip || "",
-    contractor_c2_fax: lead.contractor_c2_fax || "",
-  });
-  const [notes, setNotes] = useState(lead.notes || "");
-  const [followUps, setFollowUps] = useState(normalizeFUs(lead.follow_ups));
-  const [newFU, setNewFU] = useState({ date:"", time:"", type:"Phone Call", status:"Scheduled", notes:"" });
-  const [showCal, setShowCal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [lookupStatus, setLookupStatus] = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const [notesTimestamped, setNotesTimestamped] = useState(false);
-  const [fuNotesTimestamped, setFuNotesTimestamped] = useState(false);
+    contractor_extra_contacts: safeExtraContacts(lead.contractor_extra_contacts),
 
-  useEffect(() => {
-    setForm({
-      owner_name: lead.owner_name || "",
-      mailing_address: lead.mailing_address || "",
-      owner_city: lead.owner_city || "",
-      owner_state: lead.owner_state || "NC",
-      owner_zip: lead.owner_zip || "",
-      owner_phone: lead.owner_phone || "",
-      owner_email: lead.owner_email || "",
-      owner_fax: lead.owner_fax || "",
-      property_address: lead.property_address || "",
-      county: lead.county || "",
-      contractor_name: lead.contractor_name || "",
-      contractor_address: lead.contractor_address || "",
-      contractor_city: lead.contractor_city || "",
-      contractor_state: lead.contractor_state || "NC",
-      contractor_zip: lead.contractor_zip || "",
-      contractor_phone: lead.contractor_phone || lead.phone || "",
-      contractor_email: lead.contractor_email || "",
-      contractor_fax: lead.contractor_fax || "",
-      owner_contact2_name: lead.owner_contact2_name || "",
-      owner_contact2_title: lead.owner_contact2_title || "",
-      owner_phone2: lead.owner_phone2 || "",
-      owner_email2: lead.owner_email2 || "",
-      contractor_contact2_name: lead.contractor_contact2_name || "",
-      contractor_contact2_title: lead.contractor_contact2_title || "",
-      contractor_phone2: lead.contractor_phone2 || "",
-      contractor_email2: lead.contractor_email2 || "",
-    });
-    setNotes(lead.notes || "");
-    setFollowUps(normalizeFUs(lead.follow_ups));
-    setDeleteConfirm(false);
-    setLookupStatus("");
-    setNotesTimestamped(false);
-    setFuNotesTimestamped(false);
-  }, [lead]);
+    permit_number: lead.permit_number || "",
+    permit_date: lead.permit_date || "",
+    permit_type: lead.permit_type || "",
+    permit_description: lead.permit_description || "",
+    permit_status: lead.permit_status || "",
+    damage_type: lead.damage_type || "",
+    flood_zone: lead.flood_zone || "",
+    estimated_value: lead.estimated_value || "",
+    total_construction_cost: lead.total_construction_cost || "",
+    source_name: lead.source_name || "",
+    source_url: lead.source_url || "",
+    source_record_date: lead.source_record_date || "",
+    source_year: lead.source_year || "",
+    source_month: lead.source_month || "",
+    notes: lead.notes || "",
+  };
+}
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+function formToLeadPayload(form) {
+  const ownerContact2Name = form.owner_contact2_name || [form.owner_contact2_first_name, form.owner_contact2_mi, form.owner_contact2_last_name].filter(Boolean).join(" ");
+  const contractorContact2Name = form.contractor_contact2_name || [form.contractor_contact2_first_name, form.contractor_contact2_mi, form.contractor_contact2_last_name].filter(Boolean).join(" ");
 
-  const saveAll = async () => {
-    setSaving(true);
-    const updated = { ...lead, ...form, notes, follow_ups: followUps };
-    try {
-      await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
-        method: "PUT", body: JSON.stringify(updated),
-      });
-      onSave(updated);
-    } catch (e) { console.error(e); }
-    setSaving(false);
+  const payload = {
+    lead_name: form.lead_name || form.owner_name || form.contractor_name || form.property_address || null,
+    lead_category: form.lead_category || null,
+    lead_status: form.lead_status || "New",
+    lead_score: form.lead_score === "" ? null : Number(form.lead_score),
+
+    owner_name: form.owner_name || null,
+    owner_first_name: form.owner_first_name || null,
+    owner_mi: form.owner_mi || null,
+    owner_last_name: form.owner_last_name || null,
+    owner_mailing_address: form.owner_mailing_address || null,
+    property_manager_phone: form.property_manager_phone || null,
+    property_manager_email: form.property_manager_email || null,
+    owner_website: form.owner_website || null,
+    owner_fax: form.owner_fax || null,
+
+    owner_contact2_first_name: form.owner_contact2_first_name || null,
+    owner_contact2_mi: form.owner_contact2_mi || null,
+    owner_contact2_last_name: form.owner_contact2_last_name || null,
+    owner_contact2_name: ownerContact2Name || null,
+    owner_contact2_title: form.owner_contact2_title || null,
+    owner_phone2: form.owner_phone2 || null,
+    owner_email2: form.owner_email2 || null,
+
+    property_address: form.property_address || null,
+    county: form.county || null,
+    city: form.city || null,
+    state: form.state || null,
+    zip: form.zip || null,
+
+    contractor_name: form.contractor_name || null,
+    contractor_owner_first_name: form.contractor_owner_first_name || null,
+    contractor_owner_mi: form.contractor_owner_mi || null,
+    contractor_owner_last_name: form.contractor_owner_last_name || null,
+    contractor_address: form.contractor_address || null,
+    contractor_city: form.contractor_city || null,
+    contractor_state: form.contractor_state || null,
+    contractor_zip: form.contractor_zip || null,
+    contractor_phone: form.contractor_phone || null,
+    contractor_email: form.contractor_email || null,
+    contractor_website: form.contractor_website || null,
+    contractor_fax: form.contractor_fax || null,
+
+    contractor_contact2_first_name: form.contractor_contact2_first_name || null,
+    contractor_contact2_mi: form.contractor_contact2_mi || null,
+    contractor_contact2_last_name: form.contractor_contact2_last_name || null,
+    contractor_contact2_name: contractorContact2Name || null,
+    contractor_contact2_title: form.contractor_contact2_title || null,
+    contractor_phone2: form.contractor_phone2 || null,
+    contractor_email2: form.contractor_email2 || null,
+    contractor_extra_contacts: Array.isArray(form.contractor_extra_contacts) && form.contractor_extra_contacts.length ? form.contractor_extra_contacts : null,
+
+    permit_number: form.permit_number || null,
+    permit_date: form.permit_date || null,
+    permit_type: form.permit_type || null,
+    permit_description: form.permit_description || null,
+    permit_status: form.permit_status || null,
+    damage_type: form.damage_type || null,
+    flood_zone: form.flood_zone || null,
+    estimated_value: form.estimated_value === "" ? null : Number(form.estimated_value),
+    total_construction_cost: form.total_construction_cost === "" ? null : Number(form.total_construction_cost),
+    source_name: form.source_name || null,
+    source_url: form.source_url || null,
+    source_record_date: form.source_record_date || null,
+    source_year: form.source_year === "" ? null : Number(form.source_year),
+    source_month: form.source_month === "" ? null : Number(form.source_month),
+    notes: form.notes || null,
   };
 
-  const findContactInfo = async () => {
-    const searchName = form.contractor_name || form.owner_name;
-    const searchAddr = form.contractor_address || form.property_address || form.mailing_address;
-    if (!searchName) { setLookupStatus("⚠️ No business name found to search."); return; }
-    setLookupLoading(true);
-    setLookupStatus("🔍 Searching Google Places...");
-    try {
-      const query = `${searchName} ${searchAddr}`.trim();
-      const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(query)}&inputtype=textquery&fields=name,formatted_phone_number,website&key=${PLACES_API_KEY}`;
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      const resp = await fetch(proxyUrl);
-      const data = await resp.json();
-      if (data.candidates && data.candidates.length > 0) {
-        const place = data.candidates[0];
-        let found = [];
-        if (place.formatted_phone_number) { set("contractor_phone", place.formatted_phone_number); found.push("phone ✓"); }
-        if (place.website) {
-          const domain = new URL(place.website).hostname.replace("www.","");
-          setLookupStatus(found.length > 0
-            ? `✅ Found: ${found.join(", ")}! Website: ${domain} — check it for email. Click Save Changes to keep.`
-            : `⚠️ No phone listed. Website: ${domain} — check manually for contact info.`);
-        } else {
-          setLookupStatus(found.length > 0
-            ? `✅ Found: ${found.join(", ")}! Click Save Changes to keep.`
-            : "⚠️ Business found but no phone or website listed in Google.");
-        }
-      } else {
-        setLookupStatus("⚠️ No matching business found. Try editing the name or address.");
-      }
-    } catch (e) { setLookupStatus("❌ Lookup failed. Check your internet connection."); console.error(e); }
-    setLookupLoading(false);
-  };
-
-  const addFollowUp = () => {
-    if (!newFU.date) return;
-    setFollowUps(prev => [...prev, { ...newFU, id: Date.now(), created: new Date().toISOString() }]);
-    setNewFU({ date:"", time:"", type:"Phone Call", status:"Scheduled", notes:"" });
-  };
-
-  const updateFUStatus = (id, status) => setFollowUps(prev => prev.map(f => f.id === id ? {...f, status} : f));
-  const deleteFU = (id) => setFollowUps(prev => prev.filter(f => f.id !== id));
-
-  const formatTimestamp = () => {
-    const now = new Date();
-    const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    let hours = now.getHours();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    hours = hours % 12 || 12;
-    return `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()} — ${hours}:${String(now.getMinutes()).padStart(2,"0")} ${ampm}`;
-  };
-
-  const addTimestampedNote = () => {
-    const ts = formatTimestamp();
-    setNotes(prev => prev ? `${ts}\n\n${prev}` : `${ts}\n`);
-  };
-
-  const handleNotesFocus = () => {
-    if (!notesTimestamped) {
-      setNotes(prev => prev ? `${formatTimestamp()}\n\n${prev}` : `${formatTimestamp()}\n`);
-      setNotesTimestamped(true);
-    }
-  };
-
-  const handleFuNotesFocus = () => {
-    if (!fuNotesTimestamped) {
-      setNewFU(f => ({...f, notes: f.notes ? `${formatTimestamp()}\n\n${f.notes}` : `${formatTimestamp()}\n`}));
-      setFuNotesTimestamped(true);
-    }
-  };
-
-  // ── Letter Generation ─────────────────────────────────────────────────────
-  const openLetter = (side) => {
-    const isOwner = side === "owner";
-    const name    = isOwner ? form.owner_name : form.contractor_name;
-    const addr    = isOwner ? form.mailing_address : form.contractor_address;
-    const city    = isOwner ? form.owner_city : form.contractor_city;
-    const state   = isOwner ? form.owner_state : form.contractor_state;
-    const zip     = isOwner ? form.owner_zip : form.contractor_zip;
-    const firstName = name ? name.split(" ")[0] : "Sir or Madam";
-    const now = new Date();
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    const dateStr = `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
-    const cityLine = [city, state, zip].filter(Boolean).join(", ");
-    const isiOS = /iP(ad|hone|od)/i.test(navigator.userAgent);
-
-    const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
-      xmlns:w='urn:schemas-microsoft-com:office:word'
-      xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset='utf-8'>
-<style>
-  @page { margin: 1in; }
-  body { font-family: Cambria, 'Times New Roman', serif; font-size: 12pt; line-height: 1.5; color: #000; }
-  .letterhead h2 { font-size: 14pt; margin: 0 0 2pt; }
-  .letterhead p { margin: 2pt 0; font-size: 11pt; color: #333; }
-  hr { border: none; border-top: 1px solid #333; margin: 12pt 0; }
-  p { margin: 0 0 12pt; }
-</style></head><body>
-<div class="letterhead">
-  <h2>KQF Discount Flooring, llc</h2>
-  <p><strong>Woody Scarboro</strong></p>
-  <p>10417 S Main St, Archdale, NC 27263</p>
-  <p>Phone: (336) 360-6535 &nbsp;|&nbsp; Mobile: (336) 870-6706</p>
-  <p>Email: ncflooringguy@gmail.com</p>
-</div>
-<hr>
-<p>${dateStr}</p>
-<p><strong>${name||""}</strong><br>${addr||""}<br>${cityLine}</p>
-<p>Dear ${firstName}:</p>
-<p style="color:#777;font-style:italic">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</p>
-<br><br>
-<p>Sincerely,</p>
-<br><br>
-<p>_____________________________<br><strong>Woody Scarboro</strong><br>KQF Discount Flooring</p>
-</body></html>`;
-
-    const safeName = `Letter_${(name||"Contact").replace(/[^a-zA-Z0-9]/g,"_")}_${dateStr.replace(/[^a-zA-Z0-9]/g,"_")}`;
-
-    // Full letter HTML with print button for iPad
-    const iosHtml = `<!DOCTYPE html><html><head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width,initial-scale=1'>
-<title>Letter — ${name||"Contact"}</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 12pt; 
-    margin: 0.75in 1in; line-height: 1.6; color: #000; background:#fff; }
-  .tip { background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;
-    padding:10px 14px; margin-bottom:20px; font-size:13px; font-family:sans-serif;
-    color:#0369a1; display:flex; align-items:center; gap:8px; }
-  .letterhead h2 { font-size:14pt; margin:0 0 2pt; }
-  .letterhead p { margin:2pt 0; font-size:11pt; color:#333; font-family:sans-serif; }
-  hr { border:none; border-top:1px solid #333; margin:14pt 0; }
-  p { margin:0 0 12pt; }
-  .sig-line { border-bottom:1px solid #000; width:200px; margin-bottom:4px; }
-  @media print { .tip { display:none; } body { margin:0.75in 1in; } }
-</style></head><body>
-<div class="tip">
-  📋 <span>To save to Pages: tap the <strong>Share</strong> button (box with arrow) → <strong>Open in Pages</strong></span>
-</div>
-<div class="letterhead">
-  <h2>KQF Discount Flooring, llc</h2>
-  <p><strong>Woody Scarboro</strong></p>
-  <p>10417 S Main St, Archdale, NC 27263</p>
-  <p>Phone: (336) 360-6535 &nbsp;|&nbsp; Mobile: (336) 870-6706</p>
-  <p>Email: ncflooringguy@gmail.com</p>
-</div>
-<hr>
-<p>${dateStr}</p>
-<br>
-<p><strong>${name||""}</strong><br>${addr||""}<br>${cityLine}</p>
-<br>
-<p>Dear ${firstName}:</p>
-<br>
-<p style="color:#777;font-style:italic">[Begin your letter here. KQF Discount Flooring offers premium flooring solutions including hardwood, LVP, carpet, and tile for new construction and renovation projects.]</p>
-<br><br><br>
-<p>Sincerely,</p>
-<br><br><br>
-<div class="sig-line"></div>
-<p><strong>Woody Scarboro</strong><br>KQF Discount Flooring</p>
-</body></html>`;
-
-    if (isiOS) {
-      // Open formatted letter in new Safari tab — user taps Share → Open in Pages
-      const blob = new Blob([iosHtml], { type: "text/html" });
-      const url  = URL.createObjectURL(blob);
-      const w    = window.open(url, "_blank");
-      if (!w) {
-        // Popup blocked fallback
-        const a = document.createElement("a");
-        a.href = url; a.download = safeName + ".doc"; a.click();
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } else {
-      // On PC — download .doc which Windows opens in Word automatically
-      const blob = new Blob(["\ufeff" + html], { type: "application/msword" });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = safeName + ".doc";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-    }
-  };
-
-  // ── Mailing Label ─────────────────────────────────────────────────────────
-  const printMailingLabel = (side) => {
-    const isOwner = side === "owner";
-    const name    = isOwner ? form.owner_name : form.contractor_name;
-    const addr    = isOwner ? form.mailing_address : form.contractor_address;
-    const city    = isOwner ? form.owner_city : form.contractor_city;
-    const state   = isOwner ? form.owner_state : form.contractor_state;
-    const zip     = isOwner ? form.owner_zip : form.contractor_zip;
-    const cityLine = [city, state, zip].filter(Boolean).join(", ");
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mailing Label</title>
-<style>
-  body { font-family: Arial, sans-serif; margin: 0.5in; background: #fff; }
-  .label { width: 2.625in; height: 1in; border: 1px dashed #ccc; padding: 8px 10px;
-    box-sizing: border-box; font-size: 10pt; line-height: 1.4;
-    display: inline-flex; flex-direction: column; justify-content: center; }
-  .from { background: #f9f9f9; font-size: 8.5pt; color: #555; margin-right: 16px; }
-  .to { border: 2px solid #1A5FA8; background: #EFF3F8; }
-  .wrap { display: flex; align-items: center; }
-  button { margin-bottom: 14px; padding: 7px 20px; background: #1a3a52;
-    color: #f4a826; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-  @media print { button { display: none; } }
-</style></head><body>
-<button onclick="window.print()">🖨 Print Label</button>
-<div class="wrap">
-  <div class="label from"><b>KQF Discount Flooring, llc</b><br>Woody Scarboro<br>10417 S Main St<br>Archdale, NC 27263</div>
-  <div class="label to"><b>${name||""}</b><br>${addr||""}<br>${cityLine}</div>
-</div>
-</body></html>`;
-
-    const w = window.open("","_blank");
-    w.document.write(html);
-    w.document.close();
-  };
-
-  const openMap = (addr) => { if (addr) window.open(`https://www.google.com/maps/search/${encodeURIComponent(addr)}`, "_blank"); };
-
-  const handleDelete = async () => {
-    try {
-      await fetch(`${RTDB_URL}/leads/${lead.id}.json`, { method: "DELETE" });
-      onDelete(lead.id);
-    } catch (e) { console.error(e); }
-  };
-
-  const formatDate = (dateStr, timeStr) => {
-    if (!dateStr) return "";
-    try {
-      const [y,m,d] = dateStr.split("-").map(Number);
-      const dt = new Date(y, m-1, d);
-      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
-      if (timeStr) {
-        const [h, min] = timeStr.split(":").map(Number);
-        const ampm = h >= 12 ? "PM" : "AM";
-        const hour = h % 12 || 12;
-        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
-      }
-      return result;
-    } catch(e) { return `${dateStr} ${timeStr||""}`; }
-  };
-
-  const tabStyle = (t) => ({
-    padding:"8px 16px", cursor:"pointer", border:"none", background:"none",
-    borderBottom: activeTab === t ? "2px solid #3b82f6" : "2px solid transparent",
-    color: activeTab === t ? "#3b82f6" : "#555",
-    fontWeight: activeTab === t ? 700 : 400, fontSize:14,
+  Object.keys(payload).forEach((key) => {
+    if (Number.isNaN(payload[key])) payload[key] = null;
   });
 
-  const inp = {
-    width:"100%", padding:"7px 10px", border:"1px solid #ddd",
-    borderRadius:5, fontSize:14, boxSizing:"border-box", marginBottom:8,
-  };
-  const lbl = { fontSize:12, color:"#666", marginBottom:2, display:"block" };
+  return payload;
+}
 
-  const phoneRow = (label, key) => {
-    const addCallNote = () => {
-      const ts = formatTimestamp();
-      const entry = `📞 Call initiated — ${ts}\n   Duration: _____ min\n   Notes: \n`;
-      setNotes(prev => prev ? `${entry}\n${prev}` : entry);
-      setNotesTimestamped(true);
-      setActiveTab("notes");
-    };
-    return (
-    <div>
-      <label style={lbl}>{label}</label>
-      <div style={{display:"flex", gap:8, marginBottom:8}}>
-        <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
-        <a href={form[key] ? `tel:${form[key].replace(/\D/g,"")}` : undefined}
-          onClick={e => { if(!form[key]){e.preventDefault();} else { addCallNote(); } }}
-          style={{
-            display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
-            background: form[key] ? "#1A5FA8" : "#94a3b8",
-            color:"#fff", borderRadius:5, fontSize:13,
-            fontWeight:700, textDecoration:"none", whiteSpace:"nowrap",
-            cursor: form[key] ? "pointer" : "not-allowed", flexShrink:0
-          }}>📞 Call</a>
-      </div>
-    </div>
-    );
-  };
+function timestampLine() {
+  return new Date().toLocaleString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
-  const emailRow = (label, key) => {
-    const addEmailNote = () => {
-      const ts = formatTimestamp();
-      const entry = `✉ Email sent — ${ts}\n   Subject: \n   Notes: \n`;
-      setNotes(prev => prev ? `${entry}\n${prev}` : entry);
-      setNotesTimestamped(true);
-      setActiveTab("notes");
-    };
-    return (
-    <div>
-      <label style={lbl}>{label}</label>
-      <div style={{display:"flex", gap:8, marginBottom:8}}>
-        <input style={{...inp, marginBottom:0, flex:1}} value={form[key]} onChange={e => set(key, e.target.value)} />
-        <a href={form[key] ? `mailto:${form[key]}` : undefined}
-          onClick={e => { if(!form[key]){e.preventDefault();} else { addEmailNote(); } }}
-          style={{
-            display:"inline-flex", alignItems:"center", gap:4, padding:"7px 12px",
-            background: form[key] ? "#27AE60" : "#94a3b8",
-            color:"#fff", borderRadius:5, fontSize:13,
-            fontWeight:700, textDecoration:"none", whiteSpace:"nowrap",
-            cursor: form[key] ? "pointer" : "not-allowed", flexShrink:0
-          }}>✉ Email</a>
-      </div>
+function appendNote(existing, entry) {
+  const current = String(existing || "").trim();
+  return current ? `${entry}\n\n${current}` : entry;
+}
+
+async function logMeaningfulActivity({ lead, actionType, actionText, contactLabel, currentNotes, setCurrentNotes, onLeadPatch }) {
+  const entry = `${timestampLine()}\n${actionText}${contactLabel ? ` — ${contactLabel}` : ""}`;
+  const updatedNotes = appendNote(currentNotes, entry);
+
+  await supabase.from("activity_log").insert({
+    lead_id: lead.id,
+    action_type: actionType,
+    action_text: actionText,
+    contact_label: contactLabel || null,
+    note_text: entry,
+  });
+
+  await supabase.from("leads").update({ notes: updatedNotes }).eq("id", lead.id);
+
+  if (setCurrentNotes) setCurrentNotes(updatedNotes);
+  if (onLeadPatch) onLeadPatch({ notes: updatedNotes });
+
+  return updatedNotes;
+}
+
+function FormField({ label, children }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <label style={labelStyle}>{label}</label>
+      {children}
     </div>
-    );
-  };
+  );
+}
+
+function TextInput({ value, onChange, ...props }) {
+  return <input style={fieldStyle} value={value || ""} onChange={(e) => onChange(e.target.value)} {...props} />;
+}
+
+function SelectInput({ value, onChange, children }) {
+  return <select style={fieldStyle} value={value || ""} onChange={(e) => onChange(e.target.value)}>{children}</select>;
+}
+
+function ReportModal({ report, onClose }) {
+  if (!report) return null;
+
+  const printReport = () => window.print();
 
   return (
-    <div onClick={onClose} style={{
-      position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
-      display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2000,
+      display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: 18,
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background:"#fff", borderRadius:10, width:"90%", maxWidth:720,
-        maxHeight:"90vh", display:"flex", flexDirection:"column", overflow:"hidden",
-        boxShadow:"0 8px 32px rgba(0,0,0,0.2)"
-      }}>
-        {/* Header */}
-        <div style={{padding:"14px 20px", borderBottom:"1px solid #eee",
-          display:"flex", justifyContent:"space-between", alignItems:"center", background:"#f8f9fa"}}>
-          <h2 style={{margin:0, fontSize:17, color:"#222"}}>
-            {form.owner_name || lead.contractor_name || "Lead Detail"}
-          </h2>
-          <div style={{display:"flex", gap:8, alignItems:"center"}}>
-            {!deleteConfirm ? (
-              <button onClick={() => setDeleteConfirm(true)} style={{
-                background:"#fee2e2", color:"#dc2626", border:"none",
-                borderRadius:5, padding:"5px 12px", cursor:"pointer", fontSize:13
-              }}>Delete Lead</button>
-            ) : (
-              <>
-                <span style={{fontSize:13, color:"#dc2626", fontWeight:600}}>Are you sure?</span>
-                <button onClick={handleDelete} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:5,padding:"5px 12px",cursor:"pointer",fontSize:13}}>Yes, Delete</button>
-                <button onClick={() => setDeleteConfirm(false)} style={{background:"#e5e7eb",color:"#333",border:"none",borderRadius:5,padding:"5px 12px",cursor:"pointer",fontSize:13}}>Cancel</button>
-              </>
-            )}
-            <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888",lineHeight:1}}>✕</button>
+      <div style={{ background: "#fff", borderRadius: 10, width: "100%", maxWidth: 1100, overflow: "hidden" }}>
+        <div style={{ background: "#1A5FA8", color: "#fff", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 17 }}>{report.title}</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>Generated {new Date().toLocaleString()} · {report.rows.length} records</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={printReport} style={{ padding: "8px 14px", border: "none", borderRadius: 6, background: "#27ae60", color: "#fff", fontWeight: 800 }}>Print</button>
+            <button onClick={onClose} style={{ padding: "8px 14px", border: "none", borderRadius: 6, background: "#ef4444", color: "#fff", fontWeight: 800 }}>Close</button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{display:"flex", borderBottom:"1px solid #eee", background:"#fff", padding:"0 12px"}}>
-          {["edit","notes","followups","map"].map(t => (
-            <button key={t} style={tabStyle(t)} onClick={() => setActiveTab(t)}>
-              {t === "edit" ? "Edit Info" : t === "notes" ? "Notes" : t === "followups" ? "Follow-Ups" : "Map"}
-            </button>
+        {report.rows.length === 0 ? (
+          <div style={{ padding: 35, textAlign: "center", color: "#64748b" }}>No records found.</div>
+        ) : (
+          <div style={{ padding: 12, overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {report.columns.map((c) => (
+                    <th key={c.key} style={{ textAlign: "left", borderBottom: "2px solid #dbe6f5", padding: 8, color: "#184f89" }}>{c.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row, idx) => (
+                  <tr key={row.id || idx} style={{ background: idx % 2 ? "#f8fafc" : "#fff" }}>
+                    {report.columns.map((c) => (
+                      <td key={c.key} style={{ borderBottom: "1px solid #edf2f7", padding: 8, verticalAlign: "top" }}>{c.render ? c.render(row) : row[c.key]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev, hasNext }) {
+  const [tab, setTab] = useState("edit");
+  const [form, setForm] = useState(() => leadToForm(lead));
+  const [followUps, setFollowUps] = useState([]);
+  const [newFU, setNewFU] = useState({ fu_date: "", fu_time: "", fu_type: "Phone Call", fu_status: "Scheduled", fu_notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [loadingFU, setLoadingFU] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setForm(leadToForm(lead));
+    setMessage("");
+  }, [lead]);
+
+  const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+
+  const patchLeadLocal = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+  };
+
+  const loadFollowUps = useCallback(async () => {
+    if (!lead?.id) return;
+    setLoadingFU(true);
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .select("*")
+      .eq("lead_id", lead.id)
+      .order("fu_date", { ascending: true });
+
+    setLoadingFU(false);
+    if (!error) setFollowUps(data || []);
+  }, [lead?.id]);
+
+  useEffect(() => {
+    loadFollowUps();
+  }, [loadFollowUps]);
+
+  const saveAll = async () => {
+    setSaving(true);
+    setMessage("");
+
+    const payload = formToLeadPayload(form);
+    const { data, error } = await supabase
+      .from("leads")
+      .update(payload)
+      .eq("id", lead.id)
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      setMessage(`Save failed: ${error.message}`);
+      return;
+    }
+
+    onSaved(data);
+    setMessage("Saved.");
+  };
+
+  const deleteLead = async () => {
+    if (!window.confirm("Delete this lead from Supabase?")) return;
+    const { error } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (error) {
+      setMessage(`Delete failed: ${error.message}`);
+      return;
+    }
+    onDeleted(lead.id);
+    onClose();
+  };
+
+  const openWebsite = (url) => {
+    const clean = String(url || "").trim();
+    if (!clean) return;
+    window.open(clean.startsWith("http") ? clean : `https://${clean}`, "_blank");
+  };
+
+  const handleLookup = (side) => {
+    const query =
+      side === "owner"
+        ? [form.owner_name, form.property_address, form.city, form.state].filter(Boolean).join(" ")
+        : [form.contractor_name, form.contractor_address, form.contractor_city, form.contractor_state].filter(Boolean).join(" ");
+    if (!query.trim()) {
+      setMessage("Nothing to look up yet.");
+      return;
+    }
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank");
+  };
+
+  const handleCall = async (phone, label) => {
+    if (!phone) return;
+    await logMeaningfulActivity({
+      lead,
+      actionType: "phone_call",
+      actionText: `Phone call made to ${phone}`,
+      contactLabel: label,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+    window.location.href = `tel:${cleanPhone(phone)}`;
+  };
+
+  const handleEmail = async (email, label) => {
+    if (!email) return;
+    await logMeaningfulActivity({
+      lead,
+      actionType: "email",
+      actionText: `Email prepared/sent to ${email}`,
+      contactLabel: label,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+    window.location.href = `mailto:${email}`;
+  };
+
+  const createLetterFor = async ({ name, address, city, state, zip, label }) => {
+    const cityLine = [city, state, zip].filter(Boolean).join(", ");
+    const firstName = name ? name.split(/\s+/)[0] : "Sir or Madam";
+    const dateStr = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Letter</title>
+<style>
+body{font-family:Cambria,'Times New Roman',serif;font-size:12pt;line-height:1.55;margin:0.75in 1in;color:#000}
+button{font-family:Arial,sans-serif;margin-bottom:18px;padding:8px 16px;background:#1A5FA8;color:#fff;border:none;border-radius:5px;font-weight:bold}
+@media print{button{display:none}}
+</style></head><body>
+<button onclick="window.print()">Print Letter</button>
+<h2>Woodys Lead Program</h2>
+<p><b>Woody Scarboro</b><br>Archdale, NC</p>
+<p>${dateStr}</p>
+<p>${name || ""}<br>${address || ""}<br>${cityLine}</p>
+<p>Dear ${firstName}:</p>
+<p style="color:#777;font-style:italic">[Begin your letter here.]</p>
+<br><br>
+<p>Sincerely,</p>
+<br><br>
+<p>_____________________________<br><b>Woody Scarboro</b></p>
+</body></html>`;
+
+    const w = window.open("", "_blank");
+    w.document.write(html);
+    w.document.close();
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "letter",
+      actionText: `Letter created for ${name || "contact"}`,
+      contactLabel: label,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+  };
+
+  const createLetter = (side) => {
+    if (side === "owner") {
+      return createLetterFor({
+        name: form.owner_name,
+        address: form.owner_mailing_address,
+        city: form.city,
+        state: form.state,
+        zip: form.zip,
+        label: "Owner",
+      });
+    }
+    return createLetterFor({
+      name: form.contractor_name,
+      address: form.contractor_address,
+      city: form.contractor_city,
+      state: form.contractor_state,
+      zip: form.contractor_zip,
+      label: "Contractor",
+    });
+  };
+
+  const printLabel = async (side) => {
+    const isOwner = side === "owner";
+    const name = isOwner ? form.owner_name : form.contractor_name;
+    const addr = isOwner ? form.owner_mailing_address : form.contractor_address;
+    const city = isOwner ? form.city : form.contractor_city;
+    const state = isOwner ? form.state : form.contractor_state;
+    const zip = isOwner ? form.zip : form.contractor_zip;
+    const cityLine = [city, state, zip].filter(Boolean).join(", ");
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mailing Label</title>
+<style>
+body{font-family:Arial,sans-serif;margin:.5in}.label{width:2.625in;height:1in;border:1px dashed #aaa;padding:8px 10px;box-sizing:border-box;display:inline-flex;flex-direction:column;justify-content:center;margin-right:16px}
+button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:none;border-radius:5px;font-weight:bold}@media print{button{display:none}}
+</style></head><body><button onclick="window.print()">Print Label</button>
+<div class="label"><b>Woodys Lead Program</b><br>Archdale, NC</div>
+<div class="label"><b>${name || ""}</b><br>${addr || ""}<br>${cityLine}</div>
+</body></html>`;
+
+    const w = window.open("", "_blank");
+    w.document.write(html);
+    w.document.close();
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "letter",
+      actionText: `Mailing label created for ${name || "contact"}`,
+      contactLabel: isOwner ? "Owner" : "Contractor",
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+  };
+
+  const addFollowUp = async () => {
+    if (!newFU.fu_date) {
+      setMessage("Choose a follow-up date first.");
+      return;
+    }
+
+    const insertPayload = {
+      lead_id: lead.id,
+      fu_date: newFU.fu_date,
+      fu_time: newFU.fu_time || null,
+      fu_type: newFU.fu_type || "Phone Call",
+      fu_status: newFU.fu_status || "Scheduled",
+      fu_notes: newFU.fu_notes || null,
+    };
+
+    const { data, error } = await supabase.from("follow_ups").insert(insertPayload).select().single();
+    if (error) {
+      setMessage(`Follow-up save failed: ${error.message}`);
+      return;
+    }
+
+    setFollowUps((prev) => [...prev, data]);
+    setNewFU({ fu_date: "", fu_time: "", fu_type: "Phone Call", fu_status: "Scheduled", fu_notes: "" });
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "follow_up",
+      actionText: `Follow-up scheduled: ${insertPayload.fu_type} on ${insertPayload.fu_date}${insertPayload.fu_time ? ` at ${insertPayload.fu_time}` : ""}`,
+      contactLabel: insertPayload.fu_status,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+  };
+
+  const updateFollowUp = async (fu, patch) => {
+    const next = { ...fu, ...patch };
+    const { error } = await supabase.from("follow_ups").update(patch).eq("id", fu.id);
+    if (!error) {
+      setFollowUps((prev) => prev.map((item) => (item.id === fu.id ? next : item)));
+      if (patch.fu_status) {
+        await logMeaningfulActivity({
+          lead,
+          actionType: "follow_up",
+          actionText: `Follow-up marked ${patch.fu_status}: ${fu.fu_type || ""} ${fu.fu_date || ""}`,
+          contactLabel: fu.fu_notes || "",
+          currentNotes: form.notes,
+          setCurrentNotes: (notes) => set("notes", notes),
+          onLeadPatch: patchLeadLocal,
+        });
+      }
+    }
+  };
+
+  const deleteFollowUp = async (fu) => {
+    if (!window.confirm("Delete this follow-up?")) return;
+    const { error } = await supabase.from("follow_ups").delete().eq("id", fu.id);
+    if (!error) setFollowUps((prev) => prev.filter((item) => item.id !== fu.id));
+  };
+
+  const addContractorContact = () => {
+    setForm((f) => ({
+      ...f,
+      contractor_extra_contacts: [
+        ...(Array.isArray(f.contractor_extra_contacts) ? f.contractor_extra_contacts : []),
+        { first: "", mi: "", last: "", title: "", phone: "", email: "" },
+      ],
+    }));
+  };
+
+  const updateContractorContact = (index, key, value) => {
+    setForm((f) => {
+      const contacts = [...(Array.isArray(f.contractor_extra_contacts) ? f.contractor_extra_contacts : [])];
+      contacts[index] = { ...(contacts[index] || {}), [key]: value };
+      return { ...f, contractor_extra_contacts: contacts };
+    });
+  };
+
+  const removeContractorContact = (index) => {
+    setForm((f) => {
+      const contacts = [...(Array.isArray(f.contractor_extra_contacts) ? f.contractor_extra_contacts : [])];
+      contacts.splice(index, 1);
+      return { ...f, contractor_extra_contacts: contacts };
+    });
+  };
+
+  const POSITION_OPTIONS = [
+    "Owner", "Secretary", "Assistant", "Office Manager", "Builder / Contractor", "Project Manager",
+    "Foreman", "Receptionist", "Sales Rep", "Agent", "Property Manager", "Superintendent",
+    "Estimator", "Site Manager", "Other"
+  ];
+
+  const FieldRow = ({ label, children }) => (
+    <div style={{ display: "grid", gridTemplateColumns: "190px minmax(0, 1fr)", gap: 8, alignItems: "center", marginBottom: 7 }}>
+      <label style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
+      {children}
+    </div>
+  );
+
+  const NameRow = ({ label, firstKey, miKey, lastKey }) => (
+    <FieldRow label={label}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
+        <TextInput placeholder="First" value={form[firstKey]} onChange={(v) => set(firstKey, v)} />
+        <TextInput placeholder="MI" value={form[miKey]} onChange={(v) => set(miKey, v)} />
+        <TextInput placeholder="Last" value={form[lastKey]} onChange={(v) => set(lastKey, v)} />
+      </div>
+    </FieldRow>
+  );
+
+  const CityStateZipRow = ({ cityKey, stateKey, zipKey, lookupSide }) => (
+    <FieldRow label="City / State / Zip">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 120px 90px", gap: 6 }}>
+        <TextInput placeholder="City" value={form[cityKey]} onChange={(v) => set(cityKey, v)} />
+        <TextInput placeholder="State" value={form[stateKey]} onChange={(v) => set(stateKey, v)} />
+        <TextInput placeholder="Zip" value={form[zipKey]} onChange={(v) => set(zipKey, v)} />
+        <button onClick={() => handleLookup(lookupSide)} style={smallBlue}>Lookup</button>
+      </div>
+    </FieldRow>
+  );
+
+  const ActionRow = ({ label, value, onChange, type, contactLabel }) => (
+    <FieldRow label={label}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <TextInput value={value} onChange={onChange} />
+        {type === "phone" && <button onClick={() => handleCall(value, contactLabel)} style={smallBlue}>Call</button>}
+        {type === "email" && <button onClick={() => handleEmail(value, contactLabel)} style={smallGreen}>Email</button>}
+        {type === "website" && <button onClick={() => openWebsite(value)} style={smallBlue}>Open</button>}
+      </div>
+    </FieldRow>
+  );
+
+  const ContactNameRow = ({ contact, index }) => (
+    <FieldRow label="Name">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
+        <TextInput placeholder="First" value={contact.first || ""} onChange={(v) => updateContractorContact(index, "first", v)} />
+        <TextInput placeholder="MI" value={contact.mi || ""} onChange={(v) => updateContractorContact(index, "mi", v)} />
+        <TextInput placeholder="Last" value={contact.last || ""} onChange={(v) => updateContractorContact(index, "last", v)} />
+      </div>
+    </FieldRow>
+  );
+
+  const ContactBlock = ({ contact, index }) => {
+    const fullName = [contact.first, contact.mi, contact.last].filter(Boolean).join(" ");
+    return (
+      <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#184f89", fontWeight: 800, marginBottom: 6 }}>
+          <span>Contact #{index + 2} (Contractor)</span>
+          <button onClick={() => removeContractorContact(index)} style={smallRed}>Remove</button>
+        </div>
+        <ContactNameRow contact={contact} index={index} />
+        <FieldRow label="Position">
+          <SelectInput value={contact.title || ""} onChange={(v) => updateContractorContact(index, "title", v)}>
+            <option value="">Select...</option>
+            {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
+          </SelectInput>
+        </FieldRow>
+        <FieldRow label="Phone">
+          <div style={{ display: "flex", gap: 6 }}>
+            <TextInput value={contact.phone || ""} onChange={(v) => updateContractorContact(index, "phone", v)} />
+            <button onClick={() => handleCall(contact.phone, `Contractor Contact #${index + 2}`)} style={smallBlue}>Call</button>
+          </div>
+        </FieldRow>
+        <FieldRow label="Email">
+          <div style={{ display: "flex", gap: 6 }}>
+            <TextInput value={contact.email || ""} onChange={(v) => updateContractorContact(index, "email", v)} />
+            <button onClick={() => handleEmail(contact.email, `Contractor Contact #${index + 2}`)} style={smallGreen}>Email</button>
+          </div>
+        </FieldRow>
+        <div style={{ marginLeft: 198, marginTop: 6 }}>
+          <button
+            onClick={() => createLetterFor({
+              name: fullName,
+              address: form.contractor_address,
+              city: form.contractor_city,
+              state: form.contractor_state,
+              zip: form.contractor_zip,
+              label: `Contractor Contact #${index + 2}`,
+            })}
+            style={smallGreen}
+          >
+            Open Letter for Contact #{index + 2}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const sectionTitle = {
+    margin: "16px 0 8px",
+    paddingBottom: 4,
+    borderBottom: "1px solid #dbe6f5",
+    color: "#184f89",
+    fontWeight: 900,
+    fontSize: 15,
+  };
+  const td = { borderBottom: "1px solid #edf2f7", padding: 7, verticalAlign: "top" };
+  const smallBlue = { padding: "7px 12px", border: "none", borderRadius: 5, background: "#1A5FA8", color: "#fff", fontWeight: 800, cursor: "pointer" };
+  const smallGreen = { padding: "7px 12px", border: "none", borderRadius: 5, background: "#27ae60", color: "#fff", fontWeight: 800, cursor: "pointer" };
+  const smallRed = { padding: "7px 12px", border: "none", borderRadius: 5, background: "#dc2626", color: "#fff", fontWeight: 800, cursor: "pointer" };
+  const smallGray = { padding: "7px 12px", border: "none", borderRadius: 5, background: "#64748b", color: "#fff", fontWeight: 800, cursor: "pointer" };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: "94vw", maxWidth: 1180, maxHeight: "94vh", background: "#fff", borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "12px 16px", background: "#f4f7fb", borderBottom: "1px solid #dbe6f5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 800, color: "#184f89", fontSize: 18 }}>Lead Detail — {getLeadName({ ...lead, ...form })}</div>
+            <div style={{ color: "#64748b", fontSize: 12 }}>{form.county || "No county"} · {form.property_address || form.contractor_address || "No address"}</div>
+          </div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            <button disabled={!hasPrev} onClick={onPrev} style={smallBlue}>Previous</button>
+            <button disabled={!hasNext} onClick={onNext} style={smallBlue}>Next</button>
+            <button onClick={saveAll} disabled={saving} style={smallGreen}>{saving ? "Saving..." : "Save All Changes"}</button>
+            <button onClick={deleteLead} style={smallRed}>Delete This Lead</button>
+            <button onClick={onClose} style={smallGray}>Close</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e5edf7" }}>
+          {[
+            ["edit", "Edit Info"],
+            ["schedule", "Schedule Follow-Up"],
+            ["history", "Follow-Up History"],
+            ["summary", "Lead Summary"],
+          ].map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key)} style={{
+              padding: "10px 16px", border: "none", background: tab === key ? "#1A5FA8" : "#fff",
+              color: tab === key ? "#fff" : "#184f89", fontWeight: 800, cursor: "pointer",
+            }}>{label}</button>
           ))}
         </div>
 
-        {/* Tab Content */}
-        <div style={{overflowY:"auto", flex:1, padding:20, background:"#fff"}}>
+        {message && <div style={{ padding: "8px 16px", background: "#fff7ed", color: "#9a3412", fontSize: 13 }}>{message}</div>}
 
-          {/* EDIT INFO */}
-          {activeTab === "edit" && (
+        <div style={{ overflowY: "auto", padding: 16, flex: 1 }}>
+          {tab === "edit" && (
             <div>
-              <h4 style={{margin:"0 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>
-                Owner / Property Contact
-              </h4>
-              <label style={lbl}>Owner Name</label>
-              <input style={inp} value={form.owner_name} onChange={e => set("owner_name", e.target.value)} />
-              <label style={lbl}>Mailing Address</label>
-              <input style={inp} value={form.mailing_address} onChange={e => set("mailing_address", e.target.value)} />
-              <div style={{display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8}}>
-                <div><label style={lbl}>City</label><input style={inp} value={form.owner_city} onChange={e => set("owner_city", e.target.value)} /></div>
-                <div><label style={lbl}>State</label><input style={inp} value={form.owner_state} onChange={e => set("owner_state", e.target.value)} /></div>
-                <div><label style={lbl}>Zip</label><input style={inp} value={form.owner_zip} onChange={e => set("owner_zip", e.target.value)} /></div>
-              </div>
-              {phoneRow("Phone Number", "owner_phone")}
-              {emailRow("Email Address", "owner_email")}
-              <label style={lbl}>Fax</label>
-              <input style={inp} value={form.owner_fax} onChange={e => set("owner_fax", e.target.value)} />
-              <label style={lbl}>Property Address</label>
-              <input style={inp} value={form.property_address} onChange={e => set("property_address", e.target.value)} />
-              <label style={lbl}>County</label>
-              <input style={inp} value={form.county} onChange={e => set("county", e.target.value)} />
+              <div style={sectionTitle}>Lead Category</div>
+              <FieldRow label="Lead Category">
+                <SelectInput value={form.lead_category} onChange={(v) => set("lead_category", v)}>
+                  <option value="">Select...</option>
+                  {COMMON_CATEGORIES.filter((c) => c !== "All").map((c) => <option key={c} value={c}>{displayCategory(c)}</option>)}
+                </SelectInput>
+              </FieldRow>
 
-              {/* Second Contact — Owner Side */}
-              <div style={{borderTop:"1px solid #e5e7eb",marginTop:12,paddingTop:12}}>
-                <h5 style={{margin:"0 0 10px",color:"#f59e0b",fontSize:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>Second Contact — Owner Side</h5>
-                <label style={lbl}>Contact Name</label>
-                <input style={inp} value={form.owner_contact2_name} onChange={e => set("owner_contact2_name", e.target.value)} placeholder="Contact name" />
-                <label style={lbl}>Contact Title</label>
-                <select style={inp} value={form.owner_contact2_title} onChange={e => set("owner_contact2_title", e.target.value)}>
-                  {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
-                </select>
-                {phoneRow("Phone", "owner_phone2")}
-                {emailRow("Email", "owner_email2")}
-              </div>
+              <div style={sectionTitle}>Lead Status</div>
+              <FieldRow label="Lead Status">
+                <SelectInput value={form.lead_status} onChange={(v) => set("lead_status", v)}>
+                  {STATUS_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                </SelectInput>
+              </FieldRow>
 
-              {/* Action buttons — Owner */}
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,marginBottom:16}}>
-                <button onClick={() => printMailingLabel("owner")} style={{
-                  background:"#27AE60",color:"#fff",border:"none",borderRadius:5,
-                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-                }}>🏷 Print Owner Label</button>
-                <button onClick={() => openLetter("owner")} style={{
-                  background:"#1A5FA8",color:"#fff",border:"none",borderRadius:5,
-                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-                }}>📄 Letter (Owner)</button>
+              <div style={sectionTitle}>Owner / Property Contact</div>
+              <FieldRow label="Owner / Company Name"><TextInput value={form.owner_name} onChange={(v) => set("owner_name", v)} /></FieldRow>
+              <NameRow label="Owner Contact Name" firstKey="owner_first_name" miKey="owner_mi" lastKey="owner_last_name" />
+              <FieldRow label="Property Address"><TextInput value={form.property_address} onChange={(v) => set("property_address", v)} /></FieldRow>
+              <FieldRow label="Mailing Address"><TextInput value={form.owner_mailing_address} onChange={(v) => set("owner_mailing_address", v)} /></FieldRow>
+              <CityStateZipRow cityKey="city" stateKey="state" zipKey="zip" lookupSide="owner" />
+              <ActionRow label="Phone Number" value={form.property_manager_phone} onChange={(v) => set("property_manager_phone", v)} type="phone" contactLabel="Owner" />
+              <ActionRow label="Email Address" value={form.property_manager_email} onChange={(v) => set("property_manager_email", v)} type="email" contactLabel="Owner" />
+              <ActionRow label="Website" value={form.owner_website} onChange={(v) => set("owner_website", v)} type="website" contactLabel="Owner" />
+              <FieldRow label="Fax"><TextInput value={form.owner_fax} onChange={(v) => set("owner_fax", v)} /></FieldRow>
+              <FieldRow label="County"><TextInput value={form.county} onChange={(v) => set("county", v)} /></FieldRow>
+
+              <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10, color: "#184f89", fontWeight: 800 }}>
+                Second Contact (Owner Side)
+              </div>
+              <NameRow label="Contact Name" firstKey="owner_contact2_first_name" miKey="owner_contact2_mi" lastKey="owner_contact2_last_name" />
+              <FieldRow label="Position">
+                <SelectInput value={form.owner_contact2_title} onChange={(v) => set("owner_contact2_title", v)}>
+                  <option value="">Select...</option>
+                  {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
+                </SelectInput>
+              </FieldRow>
+              <ActionRow label="Phone" value={form.owner_phone2} onChange={(v) => set("owner_phone2", v)} type="phone" contactLabel="Owner Contact 2" />
+              <ActionRow label="Email" value={form.owner_email2} onChange={(v) => set("owner_email2", v)} type="email" contactLabel="Owner Contact 2" />
+              <div style={{ marginLeft: 198, display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <button onClick={() => printLabel("owner")} style={smallGreen}>Print Owner Mailing Label</button>
+                <button onClick={() => createLetter("owner")} style={smallGreen}>Open Letter in Word (Owner)</button>
               </div>
 
-              <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>
-                Contractor / Builder
-              </h4>
-              <label style={lbl}>Contractor Company Name</label>
-              <input style={inp} value={form.contractor_name} onChange={e => set("contractor_name", e.target.value)} placeholder="Company name" />
-              <label style={lbl}>Company Owner Name</label>
-              <input style={inp} value={form.contractor_contact2_name} onChange={e => set("contractor_contact2_name", e.target.value)} placeholder="Owner's full name" />
-              <label style={lbl}>Contact Title</label>
-              <select style={inp} value={form.contractor_contact2_title} onChange={e => set("contractor_contact2_title", e.target.value)}>
-                {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
-              </select>
-              <label style={lbl}>Street Address</label>
-              <input style={inp} value={form.contractor_address} onChange={e => set("contractor_address", e.target.value)} placeholder="Street address" />
-              <label style={lbl}>Mailing Address (if PO Box)</label>
-              <input style={inp} value={form.contractor_mailing_address||""} onChange={e => set("contractor_mailing_address", e.target.value)} placeholder="PO Box or mailing address" />
-              <div style={{display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8}}>
-                <div><label style={lbl}>City</label><input style={inp} value={form.contractor_city} onChange={e => set("contractor_city", e.target.value)} /></div>
-                <div><label style={lbl}>State</label><input style={inp} value={form.contractor_state} onChange={e => set("contractor_state", e.target.value)} /></div>
-                <div><label style={lbl}>Zip</label><input style={inp} value={form.contractor_zip} onChange={e => set("contractor_zip", e.target.value)} /></div>
-              </div>
-              {phoneRow("Phone Number", "contractor_phone")}
-              {emailRow("Email Address", "contractor_email")}
-              <label style={lbl}>Fax</label>
-              <input style={inp} value={form.contractor_fax} onChange={e => set("contractor_fax", e.target.value)} />
-
-              {/* Second Contact — Contractor Side */}
-              <div style={{borderTop:"1px solid #e5e7eb",marginTop:12,paddingTop:12}}>
-                <h5 style={{margin:"0 0 10px",color:"#f59e0b",fontSize:12,textTransform:"uppercase",letterSpacing:"0.06em"}}>Second Contact — Contractor Side</h5>
-                <label style={lbl}>Contact Name</label>
-                <input style={inp} value={form.contractor_contact2_name} onChange={e => set("contractor_contact2_name", e.target.value)} placeholder="Contact name" />
-                <label style={lbl}>Contact Title</label>
-                <select style={inp} value={form.contractor_contact2_title} onChange={e => set("contractor_contact2_title", e.target.value)}>
-                  {["","Owner","Secretary","Assistant","Office Manager","Builder / Contractor","Project Manager","Foreman","Receptionist","Sales Rep","Agent","Other"].map(t => <option key={t} value={t}>{t||"— Select Title —"}</option>)}
-                </select>
-                <label style={lbl}>Street Address</label>
-                <input style={inp} value={form.contractor_c2_address||""} onChange={e => set("contractor_c2_address", e.target.value)} placeholder="Street address" />
-                <label style={lbl}>Mailing Address (if PO Box)</label>
-                <input style={inp} value={form.contractor_c2_mailing||""} onChange={e => set("contractor_c2_mailing", e.target.value)} placeholder="PO Box or mailing address" />
-                <div style={{display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8}}>
-                  <div><label style={lbl}>City</label><input style={inp} value={form.contractor_c2_city||""} onChange={e => set("contractor_c2_city", e.target.value)} /></div>
-                  <div><label style={lbl}>State</label><input style={inp} value={form.contractor_c2_state||"NC"} onChange={e => set("contractor_c2_state", e.target.value)} /></div>
-                  <div><label style={lbl}>Zip</label><input style={inp} value={form.contractor_c2_zip||""} onChange={e => set("contractor_c2_zip", e.target.value)} /></div>
-                </div>
-                {phoneRow("Phone", "contractor_phone2")}
-                {emailRow("Email", "contractor_email2")}
-                <label style={lbl}>Fax</label>
-                <input style={inp} value={form.contractor_c2_fax||""} onChange={e => set("contractor_c2_fax", e.target.value)} />
+              <div style={sectionTitle}>Contractor</div>
+              <FieldRow label="Company Name"><TextInput value={form.contractor_name} onChange={(v) => set("contractor_name", v)} /></FieldRow>
+              <NameRow label="Company Owner" firstKey="contractor_owner_first_name" miKey="contractor_owner_mi" lastKey="contractor_owner_last_name" />
+              <FieldRow label="Business Address"><TextInput value={form.contractor_address} onChange={(v) => set("contractor_address", v)} /></FieldRow>
+              <CityStateZipRow cityKey="contractor_city" stateKey="contractor_state" zipKey="contractor_zip" lookupSide="contractor" />
+              <ActionRow label="Phone Number" value={form.contractor_phone} onChange={(v) => set("contractor_phone", v)} type="phone" contactLabel="Contractor" />
+              <ActionRow label="Email Address" value={form.contractor_email} onChange={(v) => set("contractor_email", v)} type="email" contactLabel="Contractor" />
+              <ActionRow label="Website" value={form.contractor_website} onChange={(v) => set("contractor_website", v)} type="website" contactLabel="Contractor" />
+              <FieldRow label="Fax"><TextInput value={form.contractor_fax} onChange={(v) => set("contractor_fax", v)} /></FieldRow>
+              <div style={{ marginLeft: 198, display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <button onClick={() => printLabel("contractor")} style={smallGreen}>Print Mailing Label</button>
+                <button onClick={() => createLetter("contractor")} style={smallGreen}>Letter to Company Owner</button>
               </div>
 
-              {/* Action buttons — Contractor */}
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,marginBottom:8}}>
-                <button onClick={() => printMailingLabel("contractor")} style={{
-                  background:"#27AE60",color:"#fff",border:"none",borderRadius:5,
-                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-                }}>🏷 Print Contractor Label</button>
-                <button onClick={() => openLetter("contractor")} style={{
-                  background:"#1A5FA8",color:"#fff",border:"none",borderRadius:5,
-                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-                }}>📄 Letter (Contractor)</button>
+              <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10, color: "#184f89", fontWeight: 800 }}>
+                Contact #1 (Contractor)
+              </div>
+              <NameRow label="Name" firstKey="contractor_contact2_first_name" miKey="contractor_contact2_mi" lastKey="contractor_contact2_last_name" />
+              <FieldRow label="Position">
+                <SelectInput value={form.contractor_contact2_title} onChange={(v) => set("contractor_contact2_title", v)}>
+                  <option value="">Select...</option>
+                  {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
+                </SelectInput>
+              </FieldRow>
+              <ActionRow label="Phone" value={form.contractor_phone2} onChange={(v) => set("contractor_phone2", v)} type="phone" contactLabel="Contractor Contact #1" />
+              <ActionRow label="Email" value={form.contractor_email2} onChange={(v) => set("contractor_email2", v)} type="email" contactLabel="Contractor Contact #1" />
+              <div style={{ marginLeft: 198, marginBottom: 12 }}>
+                <button
+                  onClick={() => createLetterFor({
+                    name: [form.contractor_contact2_first_name, form.contractor_contact2_mi, form.contractor_contact2_last_name].filter(Boolean).join(" "),
+                    address: form.contractor_address,
+                    city: form.contractor_city,
+                    state: form.contractor_state,
+                    zip: form.contractor_zip,
+                    label: "Contractor Contact #1",
+                  })}
+                  style={smallGreen}
+                >
+                  Open Letter for Contact #1
+                </button>
               </div>
 
-              {/* Find Phone & Email */}
-              <div style={{marginTop:16, padding:14, background:"#f0f9ff", borderRadius:8, border:"1px solid #bae6fd"}}>
-                <div style={{display:"flex", alignItems:"center", gap:10, flexWrap:"wrap"}}>
-                  <button onClick={findContactInfo} disabled={lookupLoading} style={{
-                    background: lookupLoading ? "#94a3b8" : "#0ea5e9",
-                    color:"#fff", border:"none", borderRadius:6,
-                    padding:"8px 16px", cursor: lookupLoading ? "not-allowed" : "pointer",
-                    fontSize:14, fontWeight:600, whiteSpace:"nowrap"
-                  }}>{lookupLoading ? "🔍 Searching..." : "🔍 Find Phone & Email"}</button>
-                  <span style={{fontSize:12, color:"#0369a1"}}>Searches Google Places using the business name &amp; address above</span>
-                </div>
-                {lookupStatus && <div style={{marginTop:8, fontSize:13, color:"#0c4a6e", fontWeight:500}}>{lookupStatus}</div>}
+              {(Array.isArray(form.contractor_extra_contacts) ? form.contractor_extra_contacts : []).map((contact, index) => (
+                <ContactBlock key={index} contact={contact} index={index} />
+              ))}
+              <div style={{ marginTop: 12 }}>
+                <button onClick={addContractorContact} style={smallBlue}>Add New Contact at Contractor</button>
+              </div>
+
+              <div style={sectionTitle}>Permit / Source Details</div>
+              <FieldRow label="Permit #"><TextInput value={form.permit_number} onChange={(v) => set("permit_number", v)} /></FieldRow>
+              <FieldRow label="Date"><TextInput type="date" value={form.permit_date} onChange={(v) => set("permit_date", v)} /></FieldRow>
+              <FieldRow label="Permit Type"><TextInput value={form.permit_type} onChange={(v) => set("permit_type", v)} /></FieldRow>
+              <FieldRow label="Permit Status"><TextInput value={form.permit_status} onChange={(v) => set("permit_status", v)} /></FieldRow>
+              <FieldRow label="Estimated Value"><TextInput type="number" value={form.estimated_value} onChange={(v) => set("estimated_value", v)} /></FieldRow>
+              <FieldRow label="Construction Cost"><TextInput type="number" value={form.total_construction_cost} onChange={(v) => set("total_construction_cost", v)} /></FieldRow>
+              <FieldRow label="Description"><textarea style={{ ...fieldStyle, minHeight: 70 }} value={form.permit_description || ""} onChange={(e) => set("permit_description", e.target.value)} /></FieldRow>
+              <FieldRow label="Source Name"><TextInput value={form.source_name} onChange={(v) => set("source_name", v)} /></FieldRow>
+              <ActionRow label="Source URL" value={form.source_url} onChange={(v) => set("source_url", v)} type="website" contactLabel="Source" />
+
+              <div style={sectionTitle}>Notes</div>
+              <textarea
+                value={form.notes || ""}
+                onChange={(e) => set("notes", e.target.value)}
+                style={{ ...fieldStyle, minHeight: 230, lineHeight: 1.55, fontFamily: "inherit" }}
+              />
+              <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
+                New activity notes are limited to calls, emails, letters, mailing labels, and scheduled follow-ups.
               </div>
             </div>
           )}
 
-          {/* NOTES */}
-          {activeTab === "notes" && (
+          {tab === "schedule" && (
             <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <h4 style={{margin:0,color:"#3b82f6"}}>Notes</h4>
-                <button onClick={addTimestampedNote} style={{
-                  background:"#3b82f6",color:"#fff",border:"none",
-                  borderRadius:5,padding:"6px 12px",cursor:"pointer",fontSize:13
-                }}>+ Add Timestamped Note</button>
+              <div style={sectionTitle}>Schedule Follow-Up</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+                <FormField label="Date"><TextInput type="date" value={newFU.fu_date} onChange={(v) => setNewFU((f) => ({ ...f, fu_date: v }))} /></FormField>
+                <FormField label="Time"><TextInput type="time" value={newFU.fu_time} onChange={(v) => setNewFU((f) => ({ ...f, fu_time: v }))} /></FormField>
+                <FormField label="Type"><SelectInput value={newFU.fu_type} onChange={(v) => setNewFU((f) => ({ ...f, fu_type: v }))}>{FOLLOW_UP_TYPES.map((s) => <option key={s}>{s}</option>)}</SelectInput></FormField>
+                <FormField label="Status"><SelectInput value={newFU.fu_status} onChange={(v) => setNewFU((f) => ({ ...f, fu_status: v }))}>{FOLLOW_UP_STATUSES.map((s) => <option key={s}>{s}</option>)}</SelectInput></FormField>
               </div>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                onFocus={handleNotesFocus}
-                placeholder="Click here to start a new timestamped note..."
-                style={{width:"100%",minHeight:380,padding:12,fontSize:14,
-                  border:"1px solid #ddd",borderRadius:6,resize:"vertical",
-                  boxSizing:"border-box",lineHeight:1.6,fontFamily:"inherit"}} />
+              <FormField label="Notes"><textarea style={{ ...fieldStyle, minHeight: 100 }} value={newFU.fu_notes} onChange={(e) => setNewFU((f) => ({ ...f, fu_notes: e.target.value }))} /></FormField>
+              <button onClick={addFollowUp} style={smallGreen}>Schedule Follow-Up</button>
             </div>
           )}
 
-          {/* FOLLOW-UPS */}
-          {activeTab === "followups" && (
+          {tab === "history" && (
             <div>
-              <h4 style={{margin:"0 0 12px",color:"#3b82f6"}}>Schedule Follow-Up</h4>
-              <div style={{background:"#f8f9fa",borderRadius:8,padding:14,marginBottom:20}}>
-                <div style={{position:"relative",marginBottom:8}}>
-                  <label style={lbl}>Date</label>
-                  <input readOnly
-                    value={newFU.date ? (() => {
-                      const [y,m,d] = newFU.date.split("-").map(Number);
-                      const dt = new Date(y, m-1, d);
-                      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-                      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-                      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
-                      if (newFU.time) {
-                        const [h, min] = newFU.time.split(":").map(Number);
-                        const ampm = h >= 12 ? "PM" : "AM";
-                        const hour = h % 12 || 12;
-                        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
-                      }
-                      return result;
-                    })() : ""}
-                    onClick={() => setShowCal(!showCal)}
-                    placeholder="Click to select date"
-                    style={{...inp, cursor:"pointer", background:"#fff"}} />
-                  {showCal && (
-                    <div onClick={e => e.stopPropagation()} style={{
-                      position:"fixed", top:"50%", left:"50%",
-                      transform:"translate(-50%,-50%)", zIndex:2000
-                    }}>
-                      <CalendarPicker value={newFU.date}
-                        onChange={d => setNewFU(f => ({...f, date:d}))}
-                        onClose={() => setShowCal(false)} />
-                    </div>
-                  )}
-                </div>
-                <label style={lbl}>Time</label>
-                <input style={inp} type="time" value={newFU.time} onChange={e => setNewFU(f => ({...f, time:e.target.value}))} />
-                <label style={lbl}>Type</label>
-                <select style={inp} value={newFU.type} onChange={e => setNewFU(f => ({...f, type:e.target.value}))}>
-                  {["Phone Call","Email","In-Person Visit","Text Message","Other"].map(t => <option key={t}>{t}</option>)}
-                </select>
-                <label style={lbl}>Status</label>
-                <select style={inp} value={newFU.status} onChange={e => setNewFU(f => ({...f, status:e.target.value}))}>
-                  {["Scheduled","Completed","Cancelled","No Answer"].map(s => <option key={s}>{s}</option>)}
-                </select>
-                <label style={lbl}>Notes</label>
-                <textarea value={newFU.notes}
-                  onChange={e => setNewFU(f => ({...f, notes:e.target.value}))}
-                  onFocus={handleFuNotesFocus}
-                  placeholder="Click to add timestamped note..."
-                  style={{...inp, minHeight:80, resize:"vertical", fontFamily:"inherit"}} />
-                <button onClick={addFollowUp} style={{
-                  background:"#10b981",color:"#fff",border:"none",
-                  borderRadius:5,padding:"8px 18px",cursor:"pointer",fontSize:14,width:"100%"
-                }}>Add Follow-Up</button>
-              </div>
-
-              <h4 style={{margin:"0 0 10px",color:"#3b82f6"}}>Follow-Up History</h4>
-              {followUps.length === 0 ? (
-                <p style={{color:"#888",fontSize:14}}>No follow-ups scheduled yet.</p>
+              <div style={sectionTitle}>Follow-Up History</div>
+              {loadingFU ? (
+                <div style={{ padding: 12 }}>Loading follow-ups...</div>
+              ) : followUps.length === 0 ? (
+                <div style={{ padding: 12, color: "#64748b" }}>No follow-ups scheduled.</div>
               ) : (
-                [...followUps].sort((a,b) => a.date > b.date ? 1 : -1).map(fu => (
-                  <div key={fu.id} style={{
-                    background:"#f8f9fa", borderRadius:6, padding:12, marginBottom:10,
-                    borderLeft:`3px solid ${fu.status==="Completed"?"#10b981":fu.status==="Cancelled"?"#ef4444":"#3b82f6"}`
-                  }}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <strong style={{fontSize:14}}>{formatDate(fu.date, fu.time)} — {fu.type}</strong>
-                      <span style={{fontSize:12,padding:"2px 8px",borderRadius:10,
-                        background:fu.status==="Completed"?"#d1fae5":fu.status==="Cancelled"?"#fee2e2":"#dbeafe",
-                        color:fu.status==="Completed"?"#065f46":fu.status==="Cancelled"?"#991b1b":"#1e40af"
-                      }}>{fu.status}</span>
-                    </div>
-                    {fu.notes && <p style={{margin:"6px 0 8px",fontSize:13,color:"#555"}}>{fu.notes}</p>}
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      {["Completed","Cancelled","No Answer"].map(s => (
-                        <button key={s} onClick={() => updateFUStatus(fu.id, s)} style={{
-                          fontSize:12,padding:"3px 8px",borderRadius:4,cursor:"pointer",
-                          background:fu.status===s?"#3b82f6":"#e5e7eb",
-                          color:fu.status===s?"#fff":"#333",border:"none"
-                        }}>{s}</button>
-                      ))}
-                      <button onClick={() => deleteFU(fu.id)} style={{
-                        fontSize:12,padding:"3px 8px",borderRadius:4,
-                        background:"#fee2e2",color:"#dc2626",border:"none",cursor:"pointer"
-                      }}>Remove</button>
-                    </div>
-                  </div>
-                ))
+                <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 13 }}>
+                  <thead>
+                    <tr>{["Date", "Time", "Type", "Status", "Notes", ""].map((h) => <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #dbe6f5", padding: 7 }}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {followUps.map((fu) => (
+                      <tr key={fu.id}>
+                        <td style={td}>{fu.fu_date}</td>
+                        <td style={td}>{fu.fu_time}</td>
+                        <td style={td}>{fu.fu_type}</td>
+                        <td style={td}>
+                          <select value={fu.fu_status || "Scheduled"} onChange={(e) => updateFollowUp(fu, { fu_status: e.target.value })} style={{ ...fieldStyle, padding: 5 }}>
+                            {FOLLOW_UP_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                          </select>
+                        </td>
+                        <td style={td}>{fu.fu_notes}</td>
+                        <td style={td}><button onClick={() => deleteFollowUp(fu)} style={smallRed}>Delete</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}
 
-          {/* MAP */}
-          {activeTab === "map" && (
+          {tab === "summary" && (
             <div>
-              <h4 style={{margin:"0 0 16px",color:"#3b82f6"}}>Map Addresses</h4>
-              {[
-                { label:"Property Address", addr:form.property_address },
-                { label:"Owner Mailing Address", addr:[form.mailing_address,form.owner_city,form.owner_state,form.owner_zip].filter(Boolean).join(", ") },
-                { label:"Contractor Business Address", addr:[form.contractor_address,form.contractor_city,form.contractor_state,form.contractor_zip].filter(Boolean).join(", ") },
-              ].map(({ label, addr }) => (
-                <div key={label} style={{background:"#f8f9fa",borderRadius:6,padding:12,marginBottom:10,
-                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontSize:12,color:"#888",marginBottom:2}}>{label}</div>
-                    <div style={{fontSize:14,color:"#222"}}>{addr || "No address on file"}</div>
-                  </div>
-                  <button onClick={() => openMap(addr)} disabled={!addr} style={{
-                    background:addr?"#3b82f6":"#e5e7eb",
-                    color:addr?"#fff":"#aaa",border:"none",borderRadius:5,
-                    padding:"6px 14px",cursor:addr?"pointer":"not-allowed",fontSize:13
-                  }}>Open Map</button>
-                </div>
-              ))}
+              <div style={sectionTitle}>Lead Summary</div>
+              <p><b>Name:</b> {getLeadName({ ...lead, ...form })}</p>
+              <p><b>Category:</b> {displayCategory(form.lead_category)}</p>
+              <p><b>Status:</b> {form.lead_status}</p>
+              <p><b>Score:</b> {form.lead_score}</p>
+              <p><b>County:</b> {form.county}</p>
+              <p><b>Owner:</b> {form.owner_name}</p>
+              <p><b>Property Address:</b> {form.property_address}</p>
+              <p><b>Owner Mailing Address:</b> {form.owner_mailing_address}</p>
+              <p><b>Contractor:</b> {form.contractor_name}</p>
+              <p><b>Contractor Address:</b> {form.contractor_address}</p>
+              <p><b>Phone:</b> {getLeadPhone({ ...lead, ...form })}</p>
+              <p><b>Email:</b> {getLeadEmail({ ...lead, ...form })}</p>
+              <p><b>Website:</b> {getLeadWebsite({ ...lead, ...form })}</p>
+              <p><b>Permit #:</b> {form.permit_number}</p>
+              <p><b>Permit Type:</b> {form.permit_type}</p>
+              <p><b>Estimated Value:</b> {form.estimated_value}</p>
+              <p><b>Source:</b> {form.source_name}</p>
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div style={{padding:"12px 20px",borderTop:"1px solid #eee",background:"#f8f9fa",
-          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={onPrev} disabled={!hasPrev} style={{
-              background:hasPrev?"#3b82f6":"#e5e7eb",color:hasPrev?"#fff":"#aaa",
-              border:"none",borderRadius:5,padding:"8px 16px",
-              cursor:hasPrev?"pointer":"not-allowed",fontSize:14,fontWeight:600
-            }}>← Previous</button>
-            <button onClick={onNext} disabled={!hasNext} style={{
-              background:hasNext?"#3b82f6":"#e5e7eb",color:hasNext?"#fff":"#aaa",
-              border:"none",borderRadius:5,padding:"8px 16px",
-              cursor:hasNext?"pointer":"not-allowed",fontSize:14,fontWeight:600
-            }}>Next →</button>
-          </div>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={onClose} style={{background:"#e5e7eb",color:"#333",border:"none",
-              borderRadius:5,padding:"8px 20px",cursor:"pointer",fontSize:14}}>Close</button>
-            <button onClick={saveAll} disabled={saving} style={{background:"#3b82f6",color:"#fff",
-              border:"none",borderRadius:5,padding:"8px 24px",cursor:"pointer",fontSize:14,fontWeight:600}}>
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-// ── Add Prospect Modal ─────────────────────────────────────────────────────────
-function AddProspectModal({ onClose, onSave }) {
-  const [form, setForm] = useState({
-    owner_name:"", mailing_address:"", owner_city:"", owner_state:"NC",
-    owner_zip:"", owner_phone:"", owner_email:"", owner_fax:"",
-    property_address:"", county:"",
-    contractor_name:"", contractor_address:"", contractor_city:"",
-    contractor_state:"NC", contractor_zip:"", contractor_phone:"",
-    contractor_email:"", contractor_fax:"", notes:"", status:"New",
-  });
+function AddProspectModal({ onClose, onSaved }) {
+  const [form, setForm] = useState(() => leadToForm({ lead_status: "New", state: "NC", contractor_state: "NC" }));
   const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({...f, [k]:v}));
-
-  const inp = {width:"100%",padding:"7px 10px",border:"1px solid #ddd",borderRadius:5,fontSize:14,boxSizing:"border-box",marginBottom:8};
-  const lbl = {fontSize:12,color:"#666",marginBottom:2,display:"block"};
+  const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   const save = async () => {
-    if (!form.owner_name && !form.contractor_name) return;
+    if (!form.owner_name && !form.contractor_name && !form.lead_name) return;
     setSaving(true);
-    try {
-      await fetch(`${RTDB_URL}/leads.json`, {
-        method:"POST", body:JSON.stringify({...form, date_added:new Date().toISOString(), lead_source:"Manual Entry"}),
-      });
-      onSave();
-      onClose();
-    } catch (e) { console.error(e); }
+    const payload = {
+      ...formToLeadPayload(form),
+      source_name: "Manual Web Entry",
+      source_record_date: todayISO(),
+    };
+
+    const { data, error } = await supabase.from("leads").insert(payload).select().single();
     setSaving(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    onSaved(data);
+    onClose();
   };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
-      display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
-      <div style={{background:"#fff",borderRadius:10,width:"90%",maxWidth:680,
-        maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",
-        boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid #eee",
-          display:"flex",justifyContent:"space-between",alignItems:"center",background:"#f8f9fa"}}>
-          <h2 style={{margin:0,fontSize:17}}>Add New Prospect</h2>
-          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>✕</button>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#fff", borderRadius: 10, width: "90vw", maxWidth: 760, maxHeight: "88vh", overflowY: "auto" }}>
+        <div style={{ padding: 14, background: "#f4f7fb", borderBottom: "1px solid #dbe6f5", display: "flex", justifyContent: "space-between" }}>
+          <b style={{ color: "#184f89" }}>Add New Contact / Prospect</b>
+          <button onClick={onClose} style={smallGray}>Close</button>
         </div>
-        <div style={{overflowY:"auto",flex:1,padding:20}}>
-          <h4 style={{margin:"0 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>Owner / Property Contact</h4>
-          <label style={lbl}>Owner Name</label><input style={inp} value={form.owner_name} onChange={e=>set("owner_name",e.target.value)} />
-          <label style={lbl}>Mailing Address</label><input style={inp} value={form.mailing_address} onChange={e=>set("mailing_address",e.target.value)} />
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8}}>
-            <div><label style={lbl}>City</label><input style={inp} value={form.owner_city} onChange={e=>set("owner_city",e.target.value)} /></div>
-            <div><label style={lbl}>State</label><input style={inp} value={form.owner_state} onChange={e=>set("owner_state",e.target.value)} /></div>
-            <div><label style={lbl}>Zip</label><input style={inp} value={form.owner_zip} onChange={e=>set("owner_zip",e.target.value)} /></div>
+        <div style={{ padding: 16 }}>
+          <div style={grid2}>
+            <FormField label="Lead Name"><TextInput value={form.lead_name} onChange={(v) => set("lead_name", v)} /></FormField>
+            <FormField label="Lead Category"><TextInput value={form.lead_category} onChange={(v) => set("lead_category", v)} placeholder="builder, new_home_owner, etc." /></FormField>
           </div>
-          <label style={lbl}>Phone Number</label><input style={inp} value={form.owner_phone} onChange={e=>set("owner_phone",e.target.value)} />
-          <label style={lbl}>Email Address</label><input style={inp} value={form.owner_email} onChange={e=>set("owner_email",e.target.value)} />
-          <label style={lbl}>Fax</label><input style={inp} value={form.owner_fax} onChange={e=>set("owner_fax",e.target.value)} />
-          <label style={lbl}>Property Address</label><input style={inp} value={form.property_address} onChange={e=>set("property_address",e.target.value)} />
-          <label style={lbl}>County</label><input style={inp} value={form.county} onChange={e=>set("county",e.target.value)} />
-          <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>Contractor</h4>
-          <label style={lbl}>Contractor Name</label><input style={inp} value={form.contractor_name} onChange={e=>set("contractor_name",e.target.value)} />
-          <label style={lbl}>Business Address</label><input style={inp} value={form.contractor_address} onChange={e=>set("contractor_address",e.target.value)} />
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8}}>
-            <div><label style={lbl}>City</label><input style={inp} value={form.contractor_city} onChange={e=>set("contractor_city",e.target.value)} /></div>
-            <div><label style={lbl}>State</label><input style={inp} value={form.contractor_state} onChange={e=>set("contractor_state",e.target.value)} /></div>
-            <div><label style={lbl}>Zip</label><input style={inp} value={form.contractor_zip} onChange={e=>set("contractor_zip",e.target.value)} /></div>
+          <div style={sectionTitle}>Owner / Property</div>
+          <FormField label="Owner Name"><TextInput value={form.owner_name} onChange={(v) => set("owner_name", v)} /></FormField>
+          <FormField label="Property Address"><TextInput value={form.property_address} onChange={(v) => set("property_address", v)} /></FormField>
+          <div style={grid4}>
+            <FormField label="City"><TextInput value={form.city} onChange={(v) => set("city", v)} /></FormField>
+            <FormField label="State"><TextInput value={form.state} onChange={(v) => set("state", v)} /></FormField>
+            <FormField label="Zip"><TextInput value={form.zip} onChange={(v) => set("zip", v)} /></FormField>
+            <FormField label="County"><TextInput value={form.county} onChange={(v) => set("county", v)} /></FormField>
           </div>
-          <label style={lbl}>Phone Number</label><input style={inp} value={form.contractor_phone} onChange={e=>set("contractor_phone",e.target.value)} />
-          <label style={lbl}>Email Address</label><input style={inp} value={form.contractor_email} onChange={e=>set("contractor_email",e.target.value)} />
-          <label style={lbl}>Fax</label><input style={inp} value={form.contractor_fax} onChange={e=>set("contractor_fax",e.target.value)} />
-          <h4 style={{margin:"16px 0 12px",color:"#3b82f6",borderBottom:"1px solid #e5e7eb",paddingBottom:6}}>Notes</h4>
-          <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} placeholder="Initial notes..."
-            style={{...inp,minHeight:100,resize:"vertical",fontFamily:"inherit"}} />
-        </div>
-        <div style={{padding:"12px 20px",borderTop:"1px solid #eee",background:"#f8f9fa",
-          display:"flex",justifyContent:"flex-end",gap:10}}>
-          <button onClick={onClose} style={{background:"#e5e7eb",color:"#333",border:"none",borderRadius:5,padding:"8px 20px",cursor:"pointer",fontSize:14}}>Cancel</button>
-          <button onClick={save} disabled={saving} style={{background:"#10b981",color:"#fff",border:"none",borderRadius:5,padding:"8px 24px",cursor:"pointer",fontSize:14,fontWeight:600}}>
-            {saving ? "Saving..." : "Save Prospect"}
-          </button>
+          <FormField label="Owner Phone"><TextInput value={form.property_manager_phone} onChange={(v) => set("property_manager_phone", v)} /></FormField>
+          <FormField label="Owner Email"><TextInput value={form.property_manager_email} onChange={(v) => set("property_manager_email", v)} /></FormField>
+
+          <div style={sectionTitle}>Contractor</div>
+          <FormField label="Contractor Name"><TextInput value={form.contractor_name} onChange={(v) => set("contractor_name", v)} /></FormField>
+          <FormField label="Contractor Address"><TextInput value={form.contractor_address} onChange={(v) => set("contractor_address", v)} /></FormField>
+          <div style={grid3}>
+            <FormField label="City"><TextInput value={form.contractor_city} onChange={(v) => set("contractor_city", v)} /></FormField>
+            <FormField label="State"><TextInput value={form.contractor_state} onChange={(v) => set("contractor_state", v)} /></FormField>
+            <FormField label="Zip"><TextInput value={form.contractor_zip} onChange={(v) => set("contractor_zip", v)} /></FormField>
+          </div>
+          <FormField label="Phone"><TextInput value={form.contractor_phone} onChange={(v) => set("contractor_phone", v)} /></FormField>
+          <FormField label="Email"><TextInput value={form.contractor_email} onChange={(v) => set("contractor_email", v)} /></FormField>
+          <FormField label="Website"><TextInput value={form.contractor_website} onChange={(v) => set("contractor_website", v)} /></FormField>
+
+          <button onClick={save} disabled={saving} style={smallGreen}>{saving ? "Saving..." : "Save New Contact"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Reports ────────────────────────────────────────────────────────────────────
-  const fmtReportDate = (dateStr, timeStr) => {
-    if (!dateStr) return "";
-    try {
-      const [y,m,d] = dateStr.split("-").map(Number);
-      const dt = new Date(y, m-1, d);
-      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      let result = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${d}, ${y}`;
-      if (timeStr) {
-        const [h, min] = timeStr.split(":").map(Number);
-        const ampm = h >= 12 ? "PM" : "AM";
-        const hour = h % 12 || 12;
-        result += ` — ${hour}:${String(min).padStart(2,"0")} ${ampm}`;
-      }
-      return result;
-    } catch(e) { return `${dateStr} ${timeStr||""}`; }
-  };
-
-function buildReportHTML(title, leads, followUps) {
-  return { title, items: followUps, generated: new Date().toLocaleString() };
-}
-
-// ── Main Dashboard ─────────────────────────────────────────────────────────────
 function Dashboard({ user }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [countLoading, setCountLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
   const [filterCounty, setFilterCounty] = useState("All");
+  const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
+  const [page, setPage] = useState(1);
   const [selectedLeadIndex, setSelectedLeadIndex] = useState(null);
   const [showAddProspect, setShowAddProspect] = useState(false);
-  const [showReports, setShowReports] = useState(false);
-  const [reportHTML, setReportHTML] = useState(null);
-  const [counties, setCounties] = useState([]);
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState("");
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const buildLeadQuery = useCallback((withCount = true) => {
+    let query = supabase.from("leads").select("*", withCount ? { count: "exact" } : undefined);
+
+    if (filterCounty !== "All") query = query.eq("county", filterCounty);
+    if (filterCategory !== "All") query = query.eq("lead_category", filterCategory);
+    if (filterStatus !== "All") query = query.eq("lead_status", filterStatus);
+
+    const s = search.trim();
+    if (s) {
+      const pattern = `%${s.replace(/[%_]/g, "")}%`;
+      query = query.or([
+        `lead_name.ilike.${pattern}`,
+        `owner_name.ilike.${pattern}`,
+        `contractor_name.ilike.${pattern}`,
+        `property_address.ilike.${pattern}`,
+        `county.ilike.${pattern}`,
+        `city.ilike.${pattern}`,
+        `zip.ilike.${pattern}`,
+        `contractor_phone.ilike.${pattern}`,
+        `property_manager_phone.ilike.${pattern}`,
+        `contractor_email.ilike.${pattern}`,
+        `property_manager_email.ilike.${pattern}`,
+        `permit_number.ilike.${pattern}`,
+      ].join(","));
+    }
+
+    return query;
+  }, [filterCounty, filterCategory, filterStatus, search]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
-    try {
-      const resp = await fetch(`${RTDB_URL}/leads.json`);
-      const data = await resp.json();
-      if (data) {
-        const arr = Object.entries(data).map(([id, lead]) => ({ id, ...lead }));
-        arr.sort((a, b) => (b.lead_score || 0) - (a.lead_score || 0));
-        setLeads(arr);
-        setCounties([...new Set(arr.map(l => l.county).filter(Boolean))].sort());
-      } else { setLeads([]); }
-    } catch (err) { console.error(err); }
+    setError("");
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error: fetchError, count } = await buildLeadQuery(true)
+      .order("lead_score", { ascending: false, nullsFirst: false })
+      .order("lead_name", { ascending: true, nullsFirst: false })
+      .range(from, to);
+
+    if (fetchError) {
+      setError(fetchError.message);
+      setLeads([]);
+      setTotalCount(0);
+    } else {
+      setLeads(data || []);
+      setTotalCount(count || 0);
+    }
+
     setLoading(false);
-  }, []);
+  }, [buildLeadQuery, page]);
 
   useEffect(() => {
     fetchLeads();
   }, [fetchLeads]);
 
-  const filtered = leads.filter(l => {
-    const ms = search.toLowerCase();
-    const matchSearch = ms === "" ||
-      (l.owner_name && l.owner_name.toLowerCase().includes(ms)) ||
-      (l.property_address && l.property_address.toLowerCase().includes(ms)) ||
-      (l.county && l.county.toLowerCase().includes(ms)) ||
-      (l.contractor_name && l.contractor_name.toLowerCase().includes(ms)) ||
-      (l.owner_phone && l.owner_phone.includes(ms)) ||
-      (l.contractor_phone && l.contractor_phone.includes(ms));
-    const matchCounty = filterCounty === "All" || l.county === filterCounty;
-    const matchStatus = filterStatus === "All" || (l.status || "New") === filterStatus;
-    return matchSearch && matchCounty && matchStatus;
-  });
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterCounty, filterCategory, filterStatus]);
 
-  const selectedLead = selectedLeadIndex !== null ? filtered[selectedLeadIndex] : null;
+  const selectedLead = selectedLeadIndex !== null ? leads[selectedLeadIndex] : null;
 
-  const handleSaveLead = (updated) => setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-  const handleDeleteLead = (id) => { setLeads(prev => prev.filter(l => l.id !== id)); setSelectedLeadIndex(null); };
-  const handleAddProspect = () => fetchLeads();
-  const handlePrev = () => { if (selectedLeadIndex > 0) setSelectedLeadIndex(i => i - 1); };
-  const handleNext = () => { if (selectedLeadIndex < filtered.length - 1) setSelectedLeadIndex(i => i + 1); };
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 12) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    return Array.from(new Set([
+      1, 2,
+      ...Array.from({ length: 9 }, (_, i) => page - 4 + i).filter((p) => p >= 1 && p <= totalPages),
+      totalPages - 1, totalPages
+    ])).sort((a, b) => a - b);
+  }, [page, totalPages]);
 
-  const buildFollowUps = (filter) => {
-    const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
-    const weekEnd  = new Date(now.getTime() + 7*86400000).toISOString().split("T")[0];
-    const monthEnd = new Date(now.getTime() + 30*86400000).toISOString().split("T")[0];
-    const yesterday = new Date(now.getTime() - 86400000).toISOString().split("T")[0];
-    console.log("[buildFollowUps] filter:", filter, "| today:", todayStr, "| weekEnd:", weekEnd, "| leads count:", leads.length);
-    const result = [];
-    leads.forEach(lead => {
-      const fus = normalizeFUs(lead.follow_ups);
-      if (fus.length > 0) {
-        console.log("[buildFollowUps] lead:", lead.owner_name || lead.contractor_name, "| FUs:", fus.length, "| raw type:", Array.isArray(lead.follow_ups) ? "array" : typeof lead.follow_ups);
-      }
-      fus.forEach(fu => {
-        if (!fu.date) { console.log("  skip - no date"); return; }
-        if (filter !== "all" && (fu.status === "Completed" || fu.status === "Cancelled")) { console.log("  skip - status:", fu.status); return; }
-        if (filter === "today"    && fu.date !== todayStr) { console.log("  skip today - fu.date:", fu.date); return; }
-        if (filter === "week"     && (fu.date < yesterday || fu.date > weekEnd)) { console.log("  skip week - fu.date:", fu.date); return; }
-        if (filter === "month"    && (fu.date < yesterday || fu.date > monthEnd)) { console.log("  skip month - fu.date:", fu.date); return; }
-        if (filter === "upcoming" && fu.date < yesterday) { console.log("  skip upcoming - fu.date:", fu.date); return; }
-        console.log("  INCLUDED fu.date:", fu.date, "status:", fu.status);
-        result.push({ lead, fu });
-      });
-    });
-    console.log("[buildFollowUps] result count:", result.length);
-    return result.sort((a, b) => a.fu.date > b.fu.date ? 1 : -1);
+  const handleSaved = (updated) => {
+    setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)));
   };
 
-  const markFollowUpStatus = async (leadId, fuId, newStatus, newLeadStatus) => {
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead) return;
-    const updatedFUs = normalizeFUs(lead.follow_ups).map(f =>
-      f.id === fuId ? { ...f, status: newStatus } : f
-    );
-    const updates = { follow_ups: updatedFUs };
-    if (newLeadStatus) updates.status = newLeadStatus;
-    try {
-      await fetch(`${RTDB_URL}/leads/${leadId}.json`, {
-        method: "PATCH", body: JSON.stringify(updates)
-      });
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updates } : l));
-      setReportHTML(prev => {
-        if (!prev) return prev;
-        if (newStatus === "Completed") {
-          return { ...prev, items: prev.items.filter(item =>
-            !(item.lead.id === leadId && item.fu.id === fuId)
-          )};
-        } else {
-          return { ...prev, items: prev.items.map(item =>
-            item.lead.id === leadId && item.fu.id === fuId
-              ? { ...item, fu: { ...item.fu, status: newStatus }, lead: { ...item.lead, ...(newLeadStatus ? { status: newLeadStatus } : {}) } }
-              : item
-          )};
-        }
-      });
-    } catch(e) { console.error(e); }
+  const handleDeleted = (id) => {
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    setSelectedLeadIndex(null);
+    setTotalCount((c) => Math.max(0, c - 1));
   };
-  const runReport = (type) => {
-    setShowReports(false);
-    let fuData, reportTitle;
-    if (["today","week","month","upcoming","all"].includes(type)) {
-      const labels = { today:"Today's Follow-Ups", week:"This Week's Follow-Ups",
-        month:"This Month's Follow-Ups", upcoming:"All Upcoming Follow-Ups", all:"All Follow-Ups Ever" };
-      reportTitle = labels[type];
-      fuData = buildFollowUps(type);
-    } else {
-      reportTitle = `${type} Leads`;
-      const statusLeads = leads.filter(l => (l.status || "New") === type);
-      fuData = [];
-      statusLeads.forEach(lead => normalizeFUs(lead.follow_ups).forEach(fu => fuData.push({ lead, fu })));
+
+  const handleAdded = (lead) => {
+    setLeads((prev) => [lead, ...prev]);
+    setTotalCount((c) => c + 1);
+  };
+
+  const updateLeadStatus = async (lead, status) => {
+    const { data, error: updateError } = await supabase
+      .from("leads")
+      .update({ lead_status: status })
+      .eq("id", lead.id)
+      .select()
+      .single();
+
+    if (!updateError && data) handleSaved(data);
+  };
+
+  const runActivityReport = async (scope) => {
+    const now = todayISO();
+    let from = now;
+    let title = "Today's Activity";
+
+    if (scope === "week") {
+      from = dateDaysFromNow(-7);
+      title = "Last 7 Days Activity";
+    } else if (scope === "month") {
+      from = dateDaysFromNow(-30);
+      title = "Last 30 Days Activity";
     }
-    setReportHTML(buildReportHTML(reportTitle, leads, fuData));
+
+    const { data, error: reportError } = await supabase
+      .from("activity_log")
+      .select("*, leads(lead_name, owner_name, contractor_name, property_address, county, property_manager_phone, contractor_phone)")
+      .gte("created_at", `${from}T00:00:00`)
+      .order("created_at", { ascending: false })
+      .limit(1000);
+
+    if (reportError) {
+      alert(reportError.message);
+      return;
+    }
+
+    setReport({
+      title,
+      rows: data || [],
+      columns: [
+        { key: "created_at", label: "Date/Time", render: (r) => formatDateTime(r.created_at) },
+        { key: "action_type", label: "Type" },
+        { key: "name", label: "Lead", render: (r) => getLeadName(r.leads || {}) },
+        { key: "phone", label: "Phone", render: (r) => getLeadPhone(r.leads || {}) },
+        { key: "action_text", label: "Activity" },
+        { key: "note_text", label: "Notes" },
+      ],
+    });
   };
 
-  const stats = {
-    total: leads.length,
-    new: leads.filter(l => !l.status || l.status === "New").length,
-    contacted: leads.filter(l => l.status === "Contacted").length,
-    won: leads.filter(l => l.status === "Won").length,
+  const runFollowUpReport = async (scope) => {
+    const today = todayISO();
+    let to = today;
+    let title = "Today's Follow-Ups";
+
+    if (scope === "week") {
+      to = dateDaysFromNow(7);
+      title = "Next 7 Days Follow-Ups";
+    } else if (scope === "month") {
+      to = dateDaysFromNow(30);
+      title = "Next 30 Days Follow-Ups";
+    } else if (scope === "all") {
+      to = "2999-12-31";
+      title = "All Scheduled Follow-Ups";
+    }
+
+    const { data, error: reportError } = await supabase
+      .from("follow_ups")
+      .select("*, leads(lead_name, owner_name, contractor_name, property_address, county, property_manager_phone, contractor_phone)")
+      .gte("fu_date", today)
+      .lte("fu_date", to)
+      .order("fu_date", { ascending: true })
+      .limit(1000);
+
+    if (reportError) {
+      alert(reportError.message);
+      return;
+    }
+
+    setReport({
+      title,
+      rows: data || [],
+      columns: [
+        { key: "fu_date", label: "Date" },
+        { key: "fu_time", label: "Time" },
+        { key: "fu_type", label: "Type" },
+        { key: "fu_status", label: "Status" },
+        { key: "name", label: "Lead", render: (r) => getLeadName(r.leads || {}) },
+        { key: "phone", label: "Phone", render: (r) => getLeadPhone(r.leads || {}) },
+        { key: "fu_notes", label: "Notes" },
+      ],
+    });
   };
 
-  if (loading) return (
-    <div className="loading-screen">
-      <div className="loading-spinner"></div>
-      <p>Loading leads...</p>
-    </div>
-  );
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
     <div className="dashboard">
-      <header className="header" style={{position:"sticky",top:0,zIndex:100}}>
+      <header className="header" style={{ position: "sticky", top: 0, zIndex: 100 }}>
         <div className="header-left">
-          <h1>KQF Discount Flooring</h1>
-          <span className="header-subtitle">Lead Management</span>
+          <h1>Woodys Lead Program</h1>
+          <span className="header-subtitle">Supabase Web Portal</span>
         </div>
         <div className="header-right">
-          <span className="user-email">{user.email}</span>
-          <button className="logout-btn" onClick={() => signOut(auth)}>Sign Out</button>
+          <span className="user-email">{user?.email}</span>
+          <button className="logout-btn" onClick={signOut}>Sign Out</button>
         </div>
       </header>
 
-      <div className="stats-bar" style={{position:"sticky",top:62,zIndex:99}}>
-        <div className="stat-card"><span className="stat-number">{stats.total}</span><span className="stat-label">Total Leads</span></div>
-        <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.New}}>{stats.new}</span><span className="stat-label">New</span></div>
-        <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.Contacted}}>{stats.contacted}</span><span className="stat-label">Contacted</span></div>
-        <div className="stat-card"><span className="stat-number" style={{color:STATUS_COLORS.Won}}>{stats.won}</span><span className="stat-label">Won</span></div>
+      <div className="stats-bar" style={{ position: "sticky", top: 62, zIndex: 99 }}>
+        <div className="stat-card"><span className="stat-number">{totalCount.toLocaleString()}</span><span className="stat-label">Total Leads</span></div>
+        <div className="stat-card"><span className="stat-number">{page}</span><span className="stat-label">Page</span></div>
+        <div className="stat-card"><span className="stat-number">{totalPages}</span><span className="stat-label">Pages</span></div>
+        <div className="stat-card"><span className="stat-number">{leads.length.toLocaleString()}</span><span className="stat-label">Shown</span></div>
       </div>
 
-      <div className="filters" style={{position:"sticky",top:122,zIndex:98,background:"#fff",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-        <input className="search-input" type="text" placeholder="Search by name, address, phone..."
-          value={search} onChange={e => setSearch(e.target.value)} />
-        <select value={filterCounty} onChange={e => setFilterCounty(e.target.value)}>
-          <option value="All">All Counties</option>
-          {counties.map(c => <option key={c} value={c}>{c}</option>)}
+      <div className="filters" style={{ position: "sticky", top: 122, zIndex: 98, background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,.08)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input className="search-input" type="text" placeholder="Search name, address, phone, email, permit..."
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+        <select value={filterCounty} onChange={(e) => setFilterCounty(e.target.value)}>
+          {COMMON_COUNTIES.map((c) => <option key={c} value={c}>{c === "All" ? "All Counties" : c}</option>)}
         </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+          {COMMON_CATEGORIES.map((c) => <option key={c} value={c}>{c === "All" ? "All Categories" : displayCategory(c)}</option>)}
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="All">All Statuses</option>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <button className="refresh-btn" onClick={fetchLeads}>Refresh</button>
-        <div style={{position:"relative"}}>
-          <button onClick={() => setShowReports(r => !r)} style={{
-            background:"#8b5cf6",color:"#fff",border:"none",
-            borderRadius:5,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-          }}>📊 Reports</button>
-          {showReports && (
-            <div style={{position:"absolute",top:"100%",right:0,background:"#fff",
-              border:"1px solid #ddd",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-              zIndex:200,minWidth:220,overflow:"hidden"}}>
-              {[
-                {key:"today",label:"Today's Follow-Ups"},{key:"week",label:"This Week's Follow-Ups"},
-                {key:"month",label:"This Month's Follow-Ups"},{key:"upcoming",label:"All Upcoming Follow-Ups"},
-                {key:"all",label:"All Follow-Ups Ever"},{key:"New",label:"New Leads"},
-                {key:"Contacted",label:"Contacted Leads"},{key:"Quoted",label:"Quoted Leads"},
-                {key:"Won",label:"Won Leads"},{key:"Lost",label:"Lost Leads"},
-              ].map(r => (
-                <button key={r.key} onClick={() => runReport(r.key)} style={{
-                  display:"block",width:"100%",padding:"10px 16px",background:"none",
-                  border:"none",textAlign:"left",cursor:"pointer",fontSize:13,color:"#222",
-                  borderBottom:"1px solid #f0f0f0"
-                }}
-                  onMouseEnter={e => e.target.style.background="#f5f3ff"}
-                  onMouseLeave={e => e.target.style.background="none"}
-                >{r.label}</button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button onClick={() => setShowAddProspect(true)} style={{
-          background:"#10b981",color:"#fff",border:"none",
-          borderRadius:5,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600
-        }}>+ Add Prospect</button>
+        <button onClick={() => setShowAddProspect(true)} style={smallGreen}>+ Add Contact</button>
+        <button onClick={() => runActivityReport("today")} style={smallBlue}>Daily Activity</button>
+        <button onClick={() => runActivityReport("week")} style={smallBlue}>Weekly Activity</button>
+        <button onClick={() => runFollowUpReport("week")} style={smallBlue}>Follow-Ups</button>
       </div>
 
+      {error && <div style={{ margin: 12, padding: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>{error}</div>}
+
       <div className="content">
-        <div className="leads-list">
-          <div className="leads-count">{filtered.length} leads</div>
-          {filtered.length === 0 ? (
-            <div className="empty-state"><p>No leads found.</p></div>
-          ) : (
-            filtered.map((lead, index) => (
-              <div key={lead.id}
-                className={`lead-card ${selectedLead?.id === lead.id ? "selected" : ""}`}
-                onClick={() => setSelectedLeadIndex(index)}>
-                <div className="lead-card-top">
-                  <span className="lead-name">{lead.owner_name || lead.contractor_name || "Unknown"}</span>
-                  <select
-                    className="status-badge"
-                    style={{
-                      backgroundColor: STATUS_COLORS[lead.status||"New"],
-                      color:"#fff", cursor:"pointer", border:"none",
-                      borderRadius:12, padding:"2px 8px", fontSize:12,
-                      fontWeight:600, WebkitAppearance:"none", MozAppearance:"none",
-                      appearance:"none", textAlign:"center", textAlignLast:"center",
-                    }}
-                    value={lead.status || "New"}
-                    onClick={e => e.stopPropagation()}
-                    onChange={async e => {
-                      e.stopPropagation();
-                      const next = e.target.value;
-                      try {
-                        await fetch(`${RTDB_URL}/leads/${lead.id}.json`, {
-                          method:"PATCH", body:JSON.stringify({status: next})
-                        });
-                        setLeads(prev => prev.map(l => l.id === lead.id ? {...l, status: next} : l));
-                      } catch(err) { console.error(err); }
-                    }}
-                    title="Change status"
-                  >
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div className="lead-address">{lead.property_address || "No address"}</div>
-                <div className="lead-meta">
-                  <span>{lead.county} County</span>
-                  {lead.permit_date && <span>• {lead.permit_date}</span>}
-                  {lead.lead_score && <span>• Score: {lead.lead_score}/10</span>}
-                </div>
-                {(lead.owner_phone || lead.contractor_phone) && (
-                  <div style={{marginTop:7}} onClick={e => e.stopPropagation()}>
-                    <a href={`tel:${(lead.owner_phone||lead.contractor_phone).replace(/\D/g,"")}`}
-                      style={{display:"inline-flex",alignItems:"center",gap:4,padding:"5px 12px",
-                        background:"#1A5FA8",color:"#fff",borderRadius:5,fontSize:13,
-                        fontWeight:700,textDecoration:"none"}}>📞 Call</a>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
+        <div style={{ padding: "10px 14px", color: "#64748b", fontSize: 13 }}>
+          Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads
+        </div>
+
+        {loading ? (
+          <div className="loading-screen"><div className="loading-spinner"></div><p>Loading leads...</p></div>
+        ) : leads.length === 0 ? (
+          <div className="empty-state"><p>No leads found.</p></div>
+        ) : (
+          <div style={{ overflowX: "auto", padding: "0 12px 12px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["Score", "Status", "Category", "Lead Name", "Property Address", "County", "City", "Zip", "Owner", "Builder / Contractor", "Phone"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead, index) => (
+                  <tr key={lead.id} onDoubleClick={() => setSelectedLeadIndex(index)} onClick={() => setSelectedLeadIndex(index)}
+                    style={{ background: selectedLead?.id === lead.id ? "#bfdbfe" : index % 2 ? "#f8fafc" : "#fff", cursor: "pointer" }}>
+                    <td style={td}>{lead.lead_score ? `${lead.lead_score}/10` : ""}</td>
+                    <td style={td}>
+                      <select value={lead.lead_status || "New"} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLeadStatus(lead, e.target.value)}
+                        style={{ border: "none", borderRadius: 12, color: "#fff", background: STATUS_COLORS[lead.lead_status || "New"] || "#64748b", padding: "3px 7px", fontSize: 12 }}>
+                        {STATUS_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td style={td}>{displayCategory(lead.lead_category)}</td>
+                    <td style={td}>{getLeadName(lead)}</td>
+                    <td style={td}>{lead.property_address}</td>
+                    <td style={td}>{lead.county}</td>
+                    <td style={td}>{lead.city}</td>
+                    <td style={td}>{lead.zip}</td>
+                    <td style={td}>{lead.owner_name}</td>
+                    <td style={td}>{lead.contractor_name}</td>
+                    <td style={td}>{getLeadPhone(lead)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "10px 0 16px" }}>
+          <button style={smallBlue} disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
+          {pageNumbers.map((p, idx) => {
+            const prev = pageNumbers[idx - 1];
+            return (
+              <React.Fragment key={p}>
+                {idx > 0 && p > prev + 1 && <span style={{ padding: "0 5px" }}>...</span>}
+                <button onClick={() => setPage(p)} style={p === page ? smallGreen : smallBlue}>{p}</button>
+              </React.Fragment>
+            );
+          })}
+          <button style={smallBlue} disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+          <span style={{ marginLeft: 10, fontSize: 13 }}>Go to:</span>
+          <input type="number" min="1" max={totalPages} value={page} onChange={(e) => setPage(Math.max(1, Math.min(totalPages, Number(e.target.value) || 1)))}
+            style={{ width: 65, padding: 6, border: "1px solid #cfdbea", borderRadius: 4 }} />
         </div>
       </div>
 
       {selectedLead && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",
-          display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}
-          onClick={() => setSelectedLeadIndex(null)}>
-          <div onClick={e => e.stopPropagation()}>
-            <LeadModal
-              lead={selectedLead}
-              onClose={() => setSelectedLeadIndex(null)}
-              onSave={handleSaveLead}
-              onDelete={handleDeleteLead}
-              onPrev={handlePrev}
-              onNext={handleNext}
-              hasPrev={selectedLeadIndex > 0}
-              hasNext={selectedLeadIndex < filtered.length - 1}
-            />
-          </div>
-        </div>
+        <LeadModal
+          lead={selectedLead}
+          onClose={() => setSelectedLeadIndex(null)}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+          onPrev={() => setSelectedLeadIndex((i) => Math.max(0, i - 1))}
+          onNext={() => setSelectedLeadIndex((i) => Math.min(leads.length - 1, i + 1))}
+          hasPrev={selectedLeadIndex > 0}
+          hasNext={selectedLeadIndex < leads.length - 1}
+        />
       )}
 
-      {showAddProspect && (
-        <AddProspectModal onClose={() => setShowAddProspect(false)} onSave={handleAddProspect} />
-      )}
+      {showAddProspect && <AddProspectModal onClose={() => setShowAddProspect(false)} onSaved={handleAdded} />}
 
-      {showReports && (
-        <div style={{position:"fixed",inset:0,zIndex:150}} onClick={() => setShowReports(false)} />
-      )}
-
-      {/* ── Inline Report Modal (iPad + interactive) ── */}
-      {reportHTML && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:500,
-          display:"flex",alignItems:"flex-start",justifyContent:"center",
-          overflowY:"auto",padding:"16px"}}>
-          <div style={{background:"#fff",borderRadius:10,width:"100%",maxWidth:960,
-            boxShadow:"0 8px 32px rgba(0,0,0,0.3)",overflow:"hidden"}}>
-            <div style={{background:"#3b82f6",padding:"14px 20px",display:"flex",
-              justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
-              <div>
-                <div style={{color:"#fff",fontWeight:700,fontSize:16}}>KQF Discount Flooring — {reportHTML.title}</div>
-                <div style={{color:"#dbeafe",fontSize:12}}>Generated: {reportHTML.generated} &nbsp;|&nbsp; {reportHTML.items.length} records</div>
-              </div>
-              <button onClick={() => setReportHTML(null)} style={{background:"#ef4444",color:"#fff",
-                border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontWeight:700}}>✕ Close</button>
-            </div>
-            {reportHTML.items.length === 0 ? (
-              <div style={{padding:40,textAlign:"center",color:"#888",fontSize:16}}>No records found for this report.</div>
-            ) : (
-              <div style={{overflowX:"auto",padding:"0 0 16px"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead style={{position:"sticky",top:0,background:"#1e40af",zIndex:9}}>
-                    <tr>
-                      {["Date/Time","Type","Follow-Up Status","Name","Phone","Notes","Actions"].map(h => (
-                        <th key={h} style={{color:"#fff",padding:"10px 8px",textAlign:"left",
-                          whiteSpace:"nowrap",fontWeight:600,borderBottom:"2px solid #3b82f6"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportHTML.items.map((item, i) => (
-                      <tr key={i} style={{background: i%2===0?"#fff":"#f8fafc",
-                        borderBottom:"1px solid #e5e7eb"}}>
-                        <td style={{padding:"8px",whiteSpace:"nowrap",color:"#374151"}}>
-                          {fmtReportDate(item.fu.date, item.fu.time)}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>{item.fu.type||""}</td>
-                        <td style={{padding:"8px"}}>
-                          <span style={{
-                            padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,
-                            background: item.fu.status==="Completed"?"#d1fae5":
-                              item.fu.status==="Cancelled"?"#fee2e2":
-                              item.fu.status==="No Answer"?"#fef3c7":"#dbeafe",
-                            color: item.fu.status==="Completed"?"#065f46":
-                              item.fu.status==="Cancelled"?"#991b1b":
-                              item.fu.status==="No Answer"?"#92400e":"#1e40af"
-                          }}>{item.fu.status||"Scheduled"}</span>
-                        </td>
-                        <td style={{padding:"8px",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {item.lead.owner_name||item.lead.contractor_name||""}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          {item.lead.owner_phone||item.lead.contractor_phone||""}
-                        </td>
-                        <td style={{padding:"8px",maxWidth:200,color:"#555",fontSize:12}}>
-                          {(item.fu.notes||"").substring(0,80)}{(item.fu.notes||"").length>80?"…":""}
-                        </td>
-                        <td style={{padding:"8px",whiteSpace:"nowrap"}}>
-                          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:4}}>
-                            {["Completed","No Answer","Cancelled"].map(s => (
-                              <button key={s}
-                                onClick={() => markFollowUpStatus(
-                                  item.lead.id, item.fu.id, s,
-                                  s==="Completed" ? "Contacted" : undefined
-                                )}
-                                disabled={item.fu.status === s}
-                                style={{
-                                  padding:"4px 8px",fontSize:11,border:"none",borderRadius:4,
-                                  cursor: item.fu.status === s ? "default" : "pointer",fontWeight:600,
-                                  opacity: item.fu.status === s ? 0.45 : 1,
-                                  background: s==="Completed"?"#10b981":s==="No Answer"?"#f59e0b":"#ef4444",
-                                  color:"#fff"
-                                }}>{s}</button>
-                            ))}
-                          </div>
-                          <select
-                            value={item.lead.status||"New"}
-                            onChange={async e => {
-                              const next = e.target.value;
-                              try {
-                                await fetch(`${RTDB_URL}/leads/${item.lead.id}.json`, {
-                                  method:"PATCH", body:JSON.stringify({status: next})
-                                });
-                                setLeads(prev => prev.map(l => l.id === item.lead.id ? {...l, status: next} : l));
-                                setReportHTML(prev => {
-                                  if (!prev) return prev;
-                                  return { ...prev, items: prev.items.map(it =>
-                                    it.lead.id === item.lead.id ? { ...it, lead: { ...it.lead, status: next } } : it
-                                  )};
-                                });
-                              } catch(err) { console.error(err); }
-                            }}
-                            style={{
-                              fontSize:11,padding:"3px 6px",borderRadius:4,
-                              border:`1px solid ${STATUS_COLORS[item.lead.status||"New"]}`,
-                              background: STATUS_COLORS[item.lead.status||"New"]+"18",
-                              color: STATUS_COLORS[item.lead.status||"New"],
-                              fontWeight:600,cursor:"pointer",width:"100%"
-                            }}
-                          >
-                            {STATUS_OPTIONS.map(s => <option key={s} value={s}>Lead → {s}</option>)}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ReportModal report={report} onClose={() => setReport(null)} />
     </div>
   );
 }
+
+const sectionTitle = {
+  margin: "10px 0 9px",
+  color: "#184f89",
+  borderBottom: "1px solid #dbe6f5",
+  paddingBottom: 5,
+  fontWeight: 900,
+};
+
+const grid2 = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10 };
+const grid3 = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 };
+const grid4 = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 10 };
+
+const td = {
+  padding: "7px",
+  borderBottom: "1px solid #edf2f7",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  maxWidth: 230,
+};
+
+const smallBlue = {
+  background: "#1A5FA8",
+  color: "#fff",
+  border: "none",
+  borderRadius: 5,
+  padding: "7px 10px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const smallGreen = {
+  background: "#27ae60",
+  color: "#fff",
+  border: "none",
+  borderRadius: 5,
+  padding: "7px 10px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const smallRed = {
+  background: "#dc2626",
+  color: "#fff",
+  border: "none",
+  borderRadius: 5,
+  padding: "7px 10px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const smallGray = {
+  background: "#e5e7eb",
+  color: "#334155",
+  border: "none",
+  borderRadius: 5,
+  padding: "7px 10px",
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: "pointer",
+};
 
 export default Dashboard;

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { auth } from "./firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { supabase } from "./supabaseClient";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -12,9 +11,13 @@ function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
       setError("Invalid email or password. Please try again.");
       setLoading(false);
     }
@@ -24,7 +27,7 @@ function Login() {
     <div className="login-container">
       <div className="login-box">
         <div className="login-logo">
-          <h1>Keith's Discount Flooring</h1>
+          <h1>Woodys Lead Program</h1>
           <p>Lead Management System</p>
         </div>
         <form onSubmit={handleLogin}>
