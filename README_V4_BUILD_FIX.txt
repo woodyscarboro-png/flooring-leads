@@ -1,0 +1,1 @@
+V4 build fix: removed unused countLoading/setCountLoading from src/Dashboard.js. This is intended to fix the Vercel Create React App build failure where warnings are treated as errors because CI=true. This zip also includes commit_and_push_update.bat, which can be run from the GitHub-connected flooring-leads folder after copying files in.

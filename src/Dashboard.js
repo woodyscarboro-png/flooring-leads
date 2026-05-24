@@ -1077,8 +1077,7 @@ function AddProspectModal({ onClose, onSaved }) {
 function Dashboard({ user }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [countLoading, setCountLoading] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
+const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState("");
   const [filterCounty, setFilterCounty] = useState("All");
   const [filterCategory, setFilterCategory] = useState("All");
