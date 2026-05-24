@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 
+// Load only one page from Supabase at a time. Do not fetch the whole database into the browser.
 const PAGE_SIZE = 5000;
 
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost", "Not Responding"];
@@ -1083,7 +1084,8 @@ function Dashboard({ user }) {
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [page, setPage] = useState(1);
-  const [selectedLeadIndex, setSelectedLeadIndex] = useState(null);
+  const [selectedLeadId, setSelectedLeadId] = useState(null);
+  const [editingLead, setEditingLead] = useState(null);
   const [showAddProspect, setShowAddProspect] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
@@ -1151,24 +1153,36 @@ function Dashboard({ user }) {
     setPage(1);
   }, [search, filterCounty, filterCategory, filterStatus]);
 
-  const selectedLead = selectedLeadIndex !== null ? leads[selectedLeadIndex] : null;
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setSelectedLeadId(null);
+  }, [page, search, filterCounty, filterCategory, filterStatus]);
+
+  const selectedLead = selectedLeadId ? leads.find((l) => l.id === selectedLeadId) : null;
+  const editingLeadIndex = editingLead ? leads.findIndex((l) => l.id === editingLead.id) : -1;
 
   const pageNumbers = useMemo(() => {
-    if (totalPages <= 12) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (totalPages <= 20) return Array.from({ length: totalPages }, (_, i) => i + 1);
     return Array.from(new Set([
       1, 2,
-      ...Array.from({ length: 9 }, (_, i) => page - 4 + i).filter((p) => p >= 1 && p <= totalPages),
+      ...Array.from({ length: 15 }, (_, i) => page - 7 + i).filter((p) => p >= 1 && p <= totalPages),
       totalPages - 1, totalPages
     ])).sort((a, b) => a - b);
   }, [page, totalPages]);
 
   const handleSaved = (updated) => {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? { ...l, ...updated } : l)));
+    setEditingLead((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+    setSelectedLeadId(updated.id);
   };
 
   const handleDeleted = (id) => {
     setLeads((prev) => prev.filter((l) => l.id !== id));
-    setSelectedLeadIndex(null);
+    setSelectedLeadId(null);
+    setEditingLead(null);
     setTotalCount((c) => Math.max(0, c - 1));
   };
 
@@ -1310,6 +1324,13 @@ function Dashboard({ user }) {
         </select>
         <button className="refresh-btn" onClick={fetchLeads}>Refresh</button>
         <button onClick={() => setShowAddProspect(true)} style={smallGreen}>+ Add Contact</button>
+        <button
+          disabled={!selectedLead}
+          onClick={() => selectedLead && setEditingLead(selectedLead)}
+          style={selectedLead ? smallBlue : { ...smallBlue, background: "#94a3b8", cursor: "not-allowed" }}
+        >
+          Open/Edit Selected
+        </button>
         <button onClick={() => runActivityReport("today")} style={smallBlue}>Daily Activity</button>
         <button onClick={() => runActivityReport("week")} style={smallBlue}>Weekly Activity</button>
         <button onClick={() => runFollowUpReport("week")} style={smallBlue}>Follow-Ups</button>
@@ -1338,8 +1359,10 @@ function Dashboard({ user }) {
               </thead>
               <tbody>
                 {leads.map((lead, index) => (
-                  <tr key={lead.id} onDoubleClick={() => setSelectedLeadIndex(index)} onClick={() => setSelectedLeadIndex(index)}
-                    style={{ background: selectedLead?.id === lead.id ? "#bfdbfe" : index % 2 ? "#f8fafc" : "#fff", cursor: "pointer" }}>
+                  <tr key={lead.id}
+                    onClick={() => setSelectedLeadId(lead.id)}
+                    onDoubleClick={() => { setSelectedLeadId(lead.id); setEditingLead(lead); }}
+                    style={{ background: selectedLeadId === lead.id ? "#bfdbfe" : index % 2 ? "#f8fafc" : "#fff", cursor: "pointer" }}>
                     <td style={td}>{lead.lead_score ? `${lead.lead_score}/10` : ""}</td>
                     <td style={td}>
                       <select value={lead.lead_status || "New"} onClick={(e) => e.stopPropagation()} onChange={(e) => updateLeadStatus(lead, e.target.value)}
@@ -1363,7 +1386,10 @@ function Dashboard({ user }) {
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "10px 0 16px" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "10px 0 16px", flexWrap: "wrap" }}>
+          <span style={{ color: "#184f89", fontWeight: 800, fontSize: 13, marginRight: 8 }}>
+            Page {page} of {totalPages} — showing {leads.length.toLocaleString()} of {totalCount.toLocaleString()} leads
+          </span>
           <button style={smallBlue} disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
           {pageNumbers.map((p, idx) => {
             const prev = pageNumbers[idx - 1];
@@ -1381,16 +1407,28 @@ function Dashboard({ user }) {
         </div>
       </div>
 
-      {selectedLead && (
+      {editingLead && (
         <LeadModal
-          lead={selectedLead}
-          onClose={() => setSelectedLeadIndex(null)}
+          lead={editingLead}
+          onClose={() => setEditingLead(null)}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
-          onPrev={() => setSelectedLeadIndex((i) => Math.max(0, i - 1))}
-          onNext={() => setSelectedLeadIndex((i) => Math.min(leads.length - 1, i + 1))}
-          hasPrev={selectedLeadIndex > 0}
-          hasNext={selectedLeadIndex < leads.length - 1}
+          onPrev={() => {
+            if (editingLeadIndex > 0) {
+              const prevLead = leads[editingLeadIndex - 1];
+              setSelectedLeadId(prevLead.id);
+              setEditingLead(prevLead);
+            }
+          }}
+          onNext={() => {
+            if (editingLeadIndex >= 0 && editingLeadIndex < leads.length - 1) {
+              const nextLead = leads[editingLeadIndex + 1];
+              setSelectedLeadId(nextLead.id);
+              setEditingLead(nextLead);
+            }
+          }}
+          hasPrev={editingLeadIndex > 0}
+          hasNext={editingLeadIndex >= 0 && editingLeadIndex < leads.length - 1}
         />
       )}
 
