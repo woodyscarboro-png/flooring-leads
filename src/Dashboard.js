@@ -334,6 +334,128 @@ function SelectInput({ value, onChange, children }) {
   return <select style={fieldStyle} value={value || ""} onChange={(e) => onChange(e.target.value)}>{children}</select>;
 }
 
+
+function FieldRow({ label, children }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "190px minmax(0, 1fr)", gap: 8, alignItems: "center", marginBottom: 7 }}>
+      <label style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function NameRow({ label, firstValue, miValue, lastValue, onFirstChange, onMiChange, onLastChange }) {
+  return (
+    <FieldRow label={label}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
+        <TextInput placeholder="First" value={firstValue} onChange={onFirstChange} />
+        <TextInput placeholder="MI" value={miValue} onChange={onMiChange} />
+        <TextInput placeholder="Last" value={lastValue} onChange={onLastChange} />
+      </div>
+    </FieldRow>
+  );
+}
+
+function CityStateZipRow({ cityValue, stateValue, zipValue, onCityChange, onStateChange, onZipChange, onLookup, buttonStyle }) {
+  return (
+    <FieldRow label="City / State / Zip">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 120px 90px", gap: 6 }}>
+        <TextInput placeholder="City" value={cityValue} onChange={onCityChange} />
+        <TextInput placeholder="State" value={stateValue} onChange={onStateChange} />
+        <TextInput placeholder="Zip" value={zipValue} onChange={onZipChange} />
+        <button onClick={onLookup} style={buttonStyle}>Lookup</button>
+      </div>
+    </FieldRow>
+  );
+}
+
+function ActionRow({ label, value, onChange, type, contactLabel, onCall, onEmail, onOpenWebsite, blueButtonStyle, greenButtonStyle }) {
+  return (
+    <FieldRow label={label}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <TextInput value={value} onChange={onChange} />
+        {type === "phone" && <button onClick={() => onCall(value, contactLabel)} style={blueButtonStyle}>Call</button>}
+        {type === "email" && <button onClick={() => onEmail(value, contactLabel)} style={greenButtonStyle}>Email</button>}
+        {type === "website" && <button onClick={() => onOpenWebsite(value)} style={blueButtonStyle}>Open</button>}
+      </div>
+    </FieldRow>
+  );
+}
+
+function ContactNameRow({ contact, index, onUpdate }) {
+  return (
+    <FieldRow label="Name">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
+        <TextInput placeholder="First" value={contact.first || ""} onChange={(v) => onUpdate(index, "first", v)} />
+        <TextInput placeholder="MI" value={contact.mi || ""} onChange={(v) => onUpdate(index, "mi", v)} />
+        <TextInput placeholder="Last" value={contact.last || ""} onChange={(v) => onUpdate(index, "last", v)} />
+      </div>
+    </FieldRow>
+  );
+}
+
+function ContactBlock({
+  contact,
+  index,
+  positionOptions,
+  onUpdate,
+  onRemove,
+  onCall,
+  onEmail,
+  onCreateLetter,
+  contractorAddress,
+  contractorCity,
+  contractorState,
+  contractorZip,
+  blueButtonStyle,
+  greenButtonStyle,
+  redButtonStyle,
+}) {
+  const fullName = [contact.first, contact.mi, contact.last].filter(Boolean).join(" ");
+  return (
+    <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#184f89", fontWeight: 800, marginBottom: 6 }}>
+        <span>Contact #{index + 2} (Contractor)</span>
+        <button onClick={() => onRemove(index)} style={redButtonStyle}>Remove</button>
+      </div>
+      <ContactNameRow contact={contact} index={index} onUpdate={onUpdate} />
+      <FieldRow label="Position">
+        <SelectInput value={contact.title || ""} onChange={(v) => onUpdate(index, "title", v)}>
+          <option value="">Select...</option>
+          {positionOptions.map((p) => <option key={p}>{p}</option>)}
+        </SelectInput>
+      </FieldRow>
+      <FieldRow label="Phone">
+        <div style={{ display: "flex", gap: 6 }}>
+          <TextInput value={contact.phone || ""} onChange={(v) => onUpdate(index, "phone", v)} />
+          <button onClick={() => onCall(contact.phone, `Contractor Contact #${index + 2}`)} style={blueButtonStyle}>Call</button>
+        </div>
+      </FieldRow>
+      <FieldRow label="Email">
+        <div style={{ display: "flex", gap: 6 }}>
+          <TextInput value={contact.email || ""} onChange={(v) => onUpdate(index, "email", v)} />
+          <button onClick={() => onEmail(contact.email, `Contractor Contact #${index + 2}`)} style={greenButtonStyle}>Email</button>
+        </div>
+      </FieldRow>
+      <div style={{ marginLeft: 198, marginTop: 6 }}>
+        <button
+          onClick={() => onCreateLetter({
+            name: fullName,
+            address: contractorAddress,
+            city: contractorCity,
+            state: contractorState,
+            zip: contractorZip,
+            label: `Contractor Contact #${index + 2}`,
+          })}
+          style={greenButtonStyle}
+        >
+          Open Letter for Contact #{index + 2}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReportModal({ report, onClose }) {
   if (!report) return null;
 
@@ -687,101 +809,6 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
     "Estimator", "Site Manager", "Other"
   ];
 
-  const FieldRow = ({ label, children }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "190px minmax(0, 1fr)", gap: 8, alignItems: "center", marginBottom: 7 }}>
-      <label style={{ ...labelStyle, marginBottom: 0 }}>{label}</label>
-      {children}
-    </div>
-  );
-
-  const NameRow = ({ label, firstKey, miKey, lastKey }) => (
-    <FieldRow label={label}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
-        <TextInput placeholder="First" value={form[firstKey]} onChange={(v) => set(firstKey, v)} />
-        <TextInput placeholder="MI" value={form[miKey]} onChange={(v) => set(miKey, v)} />
-        <TextInput placeholder="Last" value={form[lastKey]} onChange={(v) => set(lastKey, v)} />
-      </div>
-    </FieldRow>
-  );
-
-  const CityStateZipRow = ({ cityKey, stateKey, zipKey, lookupSide }) => (
-    <FieldRow label="City / State / Zip">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 120px 90px", gap: 6 }}>
-        <TextInput placeholder="City" value={form[cityKey]} onChange={(v) => set(cityKey, v)} />
-        <TextInput placeholder="State" value={form[stateKey]} onChange={(v) => set(stateKey, v)} />
-        <TextInput placeholder="Zip" value={form[zipKey]} onChange={(v) => set(zipKey, v)} />
-        <button onClick={() => handleLookup(lookupSide)} style={smallBlue}>Lookup</button>
-      </div>
-    </FieldRow>
-  );
-
-  const ActionRow = ({ label, value, onChange, type, contactLabel }) => (
-    <FieldRow label={label}>
-      <div style={{ display: "flex", gap: 6 }}>
-        <TextInput value={value} onChange={onChange} />
-        {type === "phone" && <button onClick={() => handleCall(value, contactLabel)} style={smallBlue}>Call</button>}
-        {type === "email" && <button onClick={() => handleEmail(value, contactLabel)} style={smallGreen}>Email</button>}
-        {type === "website" && <button onClick={() => openWebsite(value)} style={smallBlue}>Open</button>}
-      </div>
-    </FieldRow>
-  );
-
-  const ContactNameRow = ({ contact, index }) => (
-    <FieldRow label="Name">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 1fr", gap: 6 }}>
-        <TextInput placeholder="First" value={contact.first || ""} onChange={(v) => updateContractorContact(index, "first", v)} />
-        <TextInput placeholder="MI" value={contact.mi || ""} onChange={(v) => updateContractorContact(index, "mi", v)} />
-        <TextInput placeholder="Last" value={contact.last || ""} onChange={(v) => updateContractorContact(index, "last", v)} />
-      </div>
-    </FieldRow>
-  );
-
-  const ContactBlock = ({ contact, index }) => {
-    const fullName = [contact.first, contact.mi, contact.last].filter(Boolean).join(" ");
-    return (
-      <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#184f89", fontWeight: 800, marginBottom: 6 }}>
-          <span>Contact #{index + 2} (Contractor)</span>
-          <button onClick={() => removeContractorContact(index)} style={smallRed}>Remove</button>
-        </div>
-        <ContactNameRow contact={contact} index={index} />
-        <FieldRow label="Position">
-          <SelectInput value={contact.title || ""} onChange={(v) => updateContractorContact(index, "title", v)}>
-            <option value="">Select...</option>
-            {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
-          </SelectInput>
-        </FieldRow>
-        <FieldRow label="Phone">
-          <div style={{ display: "flex", gap: 6 }}>
-            <TextInput value={contact.phone || ""} onChange={(v) => updateContractorContact(index, "phone", v)} />
-            <button onClick={() => handleCall(contact.phone, `Contractor Contact #${index + 2}`)} style={smallBlue}>Call</button>
-          </div>
-        </FieldRow>
-        <FieldRow label="Email">
-          <div style={{ display: "flex", gap: 6 }}>
-            <TextInput value={contact.email || ""} onChange={(v) => updateContractorContact(index, "email", v)} />
-            <button onClick={() => handleEmail(contact.email, `Contractor Contact #${index + 2}`)} style={smallGreen}>Email</button>
-          </div>
-        </FieldRow>
-        <div style={{ marginLeft: 198, marginTop: 6 }}>
-          <button
-            onClick={() => createLetterFor({
-              name: fullName,
-              address: form.contractor_address,
-              city: form.contractor_city,
-              state: form.contractor_state,
-              zip: form.contractor_zip,
-              label: `Contractor Contact #${index + 2}`,
-            })}
-            style={smallGreen}
-          >
-            Open Letter for Contact #{index + 2}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   const sectionTitle = {
     margin: "16px 0 8px",
     paddingBottom: 4,
@@ -849,28 +876,28 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
 
               <div style={sectionTitle}>Owner / Property Contact</div>
               <FieldRow label="Owner / Company Name"><TextInput value={form.owner_name} onChange={(v) => set("owner_name", v)} /></FieldRow>
-              <NameRow label="Owner Contact Name" firstKey="owner_first_name" miKey="owner_mi" lastKey="owner_last_name" />
+              <NameRow label="Owner Contact Name" firstValue={form.owner_first_name} miValue={form.owner_mi} lastValue={form.owner_last_name} onFirstChange={(v) => set("owner_first_name", v)} onMiChange={(v) => set("owner_mi", v)} onLastChange={(v) => set("owner_last_name", v)} />
               <FieldRow label="Property Address"><TextInput value={form.property_address} onChange={(v) => set("property_address", v)} /></FieldRow>
               <FieldRow label="Mailing Address"><TextInput value={form.owner_mailing_address} onChange={(v) => set("owner_mailing_address", v)} /></FieldRow>
-              <CityStateZipRow cityKey="city" stateKey="state" zipKey="zip" lookupSide="owner" />
-              <ActionRow label="Phone Number" value={form.property_manager_phone} onChange={(v) => set("property_manager_phone", v)} type="phone" contactLabel="Owner" />
-              <ActionRow label="Email Address" value={form.property_manager_email} onChange={(v) => set("property_manager_email", v)} type="email" contactLabel="Owner" />
-              <ActionRow label="Website" value={form.owner_website} onChange={(v) => set("owner_website", v)} type="website" contactLabel="Owner" />
+              <CityStateZipRow cityValue={form.city} stateValue={form.state} zipValue={form.zip} onCityChange={(v) => set("city", v)} onStateChange={(v) => set("state", v)} onZipChange={(v) => set("zip", v)} onLookup={() => handleLookup("owner")} buttonStyle={smallBlue} />
+              <ActionRow label="Phone Number" value={form.property_manager_phone} onChange={(v) => set("property_manager_phone", v)} type="phone" contactLabel="Owner" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Email Address" value={form.property_manager_email} onChange={(v) => set("property_manager_email", v)} type="email" contactLabel="Owner" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Website" value={form.owner_website} onChange={(v) => set("owner_website", v)} type="website" contactLabel="Owner" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
               <FieldRow label="Fax"><TextInput value={form.owner_fax} onChange={(v) => set("owner_fax", v)} /></FieldRow>
               <FieldRow label="County"><TextInput value={form.county} onChange={(v) => set("county", v)} /></FieldRow>
 
               <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10, color: "#184f89", fontWeight: 800 }}>
                 Second Contact (Owner Side)
               </div>
-              <NameRow label="Contact Name" firstKey="owner_contact2_first_name" miKey="owner_contact2_mi" lastKey="owner_contact2_last_name" />
+              <NameRow label="Contact Name" firstValue={form.owner_contact2_first_name} miValue={form.owner_contact2_mi} lastValue={form.owner_contact2_last_name} onFirstChange={(v) => set("owner_contact2_first_name", v)} onMiChange={(v) => set("owner_contact2_mi", v)} onLastChange={(v) => set("owner_contact2_last_name", v)} />
               <FieldRow label="Position">
                 <SelectInput value={form.owner_contact2_title} onChange={(v) => set("owner_contact2_title", v)}>
                   <option value="">Select...</option>
                   {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
                 </SelectInput>
               </FieldRow>
-              <ActionRow label="Phone" value={form.owner_phone2} onChange={(v) => set("owner_phone2", v)} type="phone" contactLabel="Owner Contact 2" />
-              <ActionRow label="Email" value={form.owner_email2} onChange={(v) => set("owner_email2", v)} type="email" contactLabel="Owner Contact 2" />
+              <ActionRow label="Phone" value={form.owner_phone2} onChange={(v) => set("owner_phone2", v)} type="phone" contactLabel="Owner Contact 2" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Email" value={form.owner_email2} onChange={(v) => set("owner_email2", v)} type="email" contactLabel="Owner Contact 2" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
               <div style={{ marginLeft: 198, display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                 <button onClick={() => printLabel("owner")} style={smallGreen}>Print Owner Mailing Label</button>
                 <button onClick={() => createLetter("owner")} style={smallGreen}>Open Letter in Word (Owner)</button>
@@ -878,12 +905,12 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
 
               <div style={sectionTitle}>Contractor</div>
               <FieldRow label="Company Name"><TextInput value={form.contractor_name} onChange={(v) => set("contractor_name", v)} /></FieldRow>
-              <NameRow label="Company Owner" firstKey="contractor_owner_first_name" miKey="contractor_owner_mi" lastKey="contractor_owner_last_name" />
+              <NameRow label="Company Owner" firstValue={form.contractor_owner_first_name} miValue={form.contractor_owner_mi} lastValue={form.contractor_owner_last_name} onFirstChange={(v) => set("contractor_owner_first_name", v)} onMiChange={(v) => set("contractor_owner_mi", v)} onLastChange={(v) => set("contractor_owner_last_name", v)} />
               <FieldRow label="Business Address"><TextInput value={form.contractor_address} onChange={(v) => set("contractor_address", v)} /></FieldRow>
-              <CityStateZipRow cityKey="contractor_city" stateKey="contractor_state" zipKey="contractor_zip" lookupSide="contractor" />
-              <ActionRow label="Phone Number" value={form.contractor_phone} onChange={(v) => set("contractor_phone", v)} type="phone" contactLabel="Contractor" />
-              <ActionRow label="Email Address" value={form.contractor_email} onChange={(v) => set("contractor_email", v)} type="email" contactLabel="Contractor" />
-              <ActionRow label="Website" value={form.contractor_website} onChange={(v) => set("contractor_website", v)} type="website" contactLabel="Contractor" />
+              <CityStateZipRow cityValue={form.contractor_city} stateValue={form.contractor_state} zipValue={form.contractor_zip} onCityChange={(v) => set("contractor_city", v)} onStateChange={(v) => set("contractor_state", v)} onZipChange={(v) => set("contractor_zip", v)} onLookup={() => handleLookup("contractor")} buttonStyle={smallBlue} />
+              <ActionRow label="Phone Number" value={form.contractor_phone} onChange={(v) => set("contractor_phone", v)} type="phone" contactLabel="Contractor" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Email Address" value={form.contractor_email} onChange={(v) => set("contractor_email", v)} type="email" contactLabel="Contractor" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Website" value={form.contractor_website} onChange={(v) => set("contractor_website", v)} type="website" contactLabel="Contractor" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
               <FieldRow label="Fax"><TextInput value={form.contractor_fax} onChange={(v) => set("contractor_fax", v)} /></FieldRow>
               <div style={{ marginLeft: 198, display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                 <button onClick={() => printLabel("contractor")} style={smallGreen}>Print Mailing Label</button>
@@ -893,15 +920,15 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
               <div style={{ borderTop: "1px solid #dbe6f5", marginTop: 12, paddingTop: 10, color: "#184f89", fontWeight: 800 }}>
                 Contact #1 (Contractor)
               </div>
-              <NameRow label="Name" firstKey="contractor_contact2_first_name" miKey="contractor_contact2_mi" lastKey="contractor_contact2_last_name" />
+              <NameRow label="Name" firstValue={form.contractor_contact2_first_name} miValue={form.contractor_contact2_mi} lastValue={form.contractor_contact2_last_name} onFirstChange={(v) => set("contractor_contact2_first_name", v)} onMiChange={(v) => set("contractor_contact2_mi", v)} onLastChange={(v) => set("contractor_contact2_last_name", v)} />
               <FieldRow label="Position">
                 <SelectInput value={form.contractor_contact2_title} onChange={(v) => set("contractor_contact2_title", v)}>
                   <option value="">Select...</option>
                   {POSITION_OPTIONS.map((p) => <option key={p}>{p}</option>)}
                 </SelectInput>
               </FieldRow>
-              <ActionRow label="Phone" value={form.contractor_phone2} onChange={(v) => set("contractor_phone2", v)} type="phone" contactLabel="Contractor Contact #1" />
-              <ActionRow label="Email" value={form.contractor_email2} onChange={(v) => set("contractor_email2", v)} type="email" contactLabel="Contractor Contact #1" />
+              <ActionRow label="Phone" value={form.contractor_phone2} onChange={(v) => set("contractor_phone2", v)} type="phone" contactLabel="Contractor Contact #1" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
+              <ActionRow label="Email" value={form.contractor_email2} onChange={(v) => set("contractor_email2", v)} type="email" contactLabel="Contractor Contact #1" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
               <div style={{ marginLeft: 198, marginBottom: 12 }}>
                 <button
                   onClick={() => createLetterFor({
@@ -919,7 +946,7 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
               </div>
 
               {(Array.isArray(form.contractor_extra_contacts) ? form.contractor_extra_contacts : []).map((contact, index) => (
-                <ContactBlock key={index} contact={contact} index={index} />
+                <ContactBlock key={index} contact={contact} index={index} positionOptions={POSITION_OPTIONS} onUpdate={updateContractorContact} onRemove={removeContractorContact} onCall={handleCall} onEmail={handleEmail} onCreateLetter={createLetterFor} contractorAddress={form.contractor_address} contractorCity={form.contractor_city} contractorState={form.contractor_state} contractorZip={form.contractor_zip} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} redButtonStyle={smallRed} />
               ))}
               <div style={{ marginTop: 12 }}>
                 <button onClick={addContractorContact} style={smallBlue}>Add New Contact at Contractor</button>
@@ -934,7 +961,7 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
               <FieldRow label="Construction Cost"><TextInput type="number" value={form.total_construction_cost} onChange={(v) => set("total_construction_cost", v)} /></FieldRow>
               <FieldRow label="Description"><textarea style={{ ...fieldStyle, minHeight: 70 }} value={form.permit_description || ""} onChange={(e) => set("permit_description", e.target.value)} /></FieldRow>
               <FieldRow label="Source Name"><TextInput value={form.source_name} onChange={(v) => set("source_name", v)} /></FieldRow>
-              <ActionRow label="Source URL" value={form.source_url} onChange={(v) => set("source_url", v)} type="website" contactLabel="Source" />
+              <ActionRow label="Source URL" value={form.source_url} onChange={(v) => set("source_url", v)} type="website" contactLabel="Source" onCall={handleCall} onEmail={handleEmail} onOpenWebsite={openWebsite} blueButtonStyle={smallBlue} greenButtonStyle={smallGreen} />
 
               <div style={sectionTitle}>Notes</div>
               <textarea
