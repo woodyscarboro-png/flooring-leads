@@ -1,0 +1,1 @@
+V7 update: Header, stats row, and search/filter/action row are now fixed at the top of the browser window so Add Contact, Daily Activity, Weekly Activity, and Follow-Ups stay clickable while scrolling. The table column headers are also sticky below the fixed controls.

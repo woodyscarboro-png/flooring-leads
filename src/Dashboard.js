@@ -1290,7 +1290,7 @@ const [totalCount, setTotalCount] = useState(0);
 
   return (
     <div className="dashboard">
-      <header className="header" style={{ position: "sticky", top: 0, zIndex: 300 }}>
+      <header className="header" style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000 }}>
         <div className="header-left">
           <h1>Woodys Lead Program</h1>
           <span className="header-subtitle">Supabase Web Portal</span>
@@ -1301,7 +1301,7 @@ const [totalCount, setTotalCount] = useState(0);
         </div>
       </header>
 
-      <div className="stats-bar" style={{ position: "sticky", top: 62, zIndex: 275 }}>
+      <div className="stats-bar" style={{ position: "fixed", top: 64, left: 0, right: 0, zIndex: 990, background: "#fff", borderBottom: "1px solid #e5edf7" }}>
         <div className="stat-card"><span className="stat-number">{totalCount.toLocaleString()}</span><span className="stat-label">Total Leads</span></div>
         <div className="stat-card"><span className="stat-number">{page}</span><span className="stat-label">Page</span></div>
         <div className="stat-card"><span className="stat-number">{totalPages}</span><span className="stat-label">Pages</span></div>
@@ -1309,9 +1309,11 @@ const [totalCount, setTotalCount] = useState(0);
       </div>
 
       <div className="filters" style={{
-        position: "sticky",
-        top: 122,
-        zIndex: 250,
+        position: "fixed",
+        top: 148,
+        left: 0,
+        right: 0,
+        zIndex: 980,
         background: "#fff",
         boxShadow: "0 3px 10px rgba(0,0,0,.14)",
         display: "flex",
@@ -1341,7 +1343,7 @@ const [totalCount, setTotalCount] = useState(0);
 
       {error && <div style={{ margin: 12, padding: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>{error}</div>}
 
-      <div className="content" style={{ paddingBottom: 92 }}>
+      <div className="content" style={{ paddingTop: 205, paddingBottom: 92 }}>
         <div style={{ padding: "10px 14px", color: "#64748b", fontSize: 13 }}>
           Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads
         </div>
@@ -1356,7 +1358,7 @@ const [totalCount, setTotalCount] = useState(0);
               <thead>
                 <tr>
                   {["Score", "Status", "Category", "Lead Name", "Property Address", "County", "City", "Zip", "Owner", "Builder / Contractor", "Phone"].map((h) => (
-                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap" }}>{h}</th>
+                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap", position: "sticky", top: 196, zIndex: 120 }}>{h}</th>
                   ))}
                 </tr>
               </thead>

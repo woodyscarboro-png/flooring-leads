@@ -10,7 +10,7 @@ pause
 git status
 echo.
 git add src/Dashboard.js README_V3_PAGED_STABLE_EDIT.txt README_DESKTOP_EDIT_MATCH.txt README.md package.json package-lock.json public src .env.example
-git commit -m "Clean filter bar and remove open selected button"
+git commit -m "Make top controls fixed and sticky"
 git push origin main
 
 echo.
