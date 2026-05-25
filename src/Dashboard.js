@@ -1343,7 +1343,7 @@ const [totalCount, setTotalCount] = useState(0);
 
       {error && <div style={{ margin: 12, padding: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>{error}</div>}
 
-      <div className="content" style={{ paddingTop: 205, paddingBottom: 92 }}>
+      <div className="content" style={{ paddingTop: 205, paddingBottom: 92, display: "block", overflow: "visible", height: "auto" }}>
         <div style={{ padding: "10px 14px", color: "#64748b", fontSize: 13 }}>
           Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads
         </div>
@@ -1353,12 +1353,12 @@ const [totalCount, setTotalCount] = useState(0);
         ) : leads.length === 0 ? (
           <div className="empty-state"><p>No leads found.</p></div>
         ) : (
-          <div style={{ overflowX: "auto", padding: "0 12px 12px" }}>
+          <div style={{ overflowX: "auto", overflowY: "visible", width: "100%", padding: "0 12px 12px" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
                   {["Score", "Status", "Category", "Lead Name", "Property Address", "County", "City", "Zip", "Owner", "Builder / Contractor", "Phone"].map((h) => (
-                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap", position: "sticky", top: 196, zIndex: 120 }}>{h}</th>
+                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 120 }}>{h}</th>
                   ))}
                 </tr>
               </thead>

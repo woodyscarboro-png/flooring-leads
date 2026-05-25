@@ -1,0 +1,1 @@
+V9 fix: corrected the lead table layout so the Score/Status/Category header row stays at the top of the lead table instead of dropping into the middle of the visible records. The main content area is forced to block layout, and the table header now sticks to the top of the table container.
