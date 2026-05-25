@@ -780,7 +780,7 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "94vw", maxWidth: 1180, maxHeight: "94vh", background: "#fff", borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: "94vw", maxWidth: 1180, height: "94vh", maxHeight: "94vh", background: "#fff", borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "12px 16px", background: "#f4f7fb", borderBottom: "1px solid #dbe6f5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontWeight: 800, color: "#184f89", fontSize: 18 }}>Lead Detail — {getLeadName({ ...lead, ...form })}</div>
@@ -811,7 +811,7 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
 
         {message && <div style={{ padding: "8px 16px", background: "#fff7ed", color: "#9a3412", fontSize: 13 }}>{message}</div>}
 
-        <div style={{ overflowY: "auto", padding: 16, flex: 1 }}>
+        <div style={{ overflowY: "auto", padding: 16, flex: 1, minHeight: 0 }}>
           {tab === "edit" && (
             <div>
               <div style={sectionTitle}>Lead Category</div>
