@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 // Load only one page from Supabase at a time. Do not fetch the whole database into the browser.
-const PAGE_SIZE = 5000;
+const PAGE_SIZE = 1000;
 
 const STATUS_OPTIONS = ["New", "Contacted", "Quoted", "Won", "Lost", "Not Responding"];
 const FOLLOW_UP_TYPES = ["Phone Call", "Email", "In-Person Visit", "Text Message", "Other"];
@@ -1290,7 +1290,7 @@ const [totalCount, setTotalCount] = useState(0);
 
   return (
     <div className="dashboard">
-      <header className="header" style={{ position: "sticky", top: 0, zIndex: 100 }}>
+      <header className="header" style={{ position: "sticky", top: 0, zIndex: 300 }}>
         <div className="header-left">
           <h1>Woodys Lead Program</h1>
           <span className="header-subtitle">Supabase Web Portal</span>
@@ -1301,14 +1301,25 @@ const [totalCount, setTotalCount] = useState(0);
         </div>
       </header>
 
-      <div className="stats-bar" style={{ position: "sticky", top: 62, zIndex: 99 }}>
+      <div className="stats-bar" style={{ position: "sticky", top: 62, zIndex: 275 }}>
         <div className="stat-card"><span className="stat-number">{totalCount.toLocaleString()}</span><span className="stat-label">Total Leads</span></div>
         <div className="stat-card"><span className="stat-number">{page}</span><span className="stat-label">Page</span></div>
         <div className="stat-card"><span className="stat-number">{totalPages}</span><span className="stat-label">Pages</span></div>
         <div className="stat-card"><span className="stat-number">{leads.length.toLocaleString()}</span><span className="stat-label">Shown</span></div>
       </div>
 
-      <div className="filters" style={{ position: "sticky", top: 122, zIndex: 98, background: "#fff", boxShadow: "0 2px 8px rgba(0,0,0,.08)", display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="filters" style={{
+        position: "sticky",
+        top: 122,
+        zIndex: 250,
+        background: "#fff",
+        boxShadow: "0 3px 10px rgba(0,0,0,.14)",
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center",
+        borderBottom: "1px solid #cfdbea",
+      }}>
         <input className="search-input" type="text" placeholder="Search name, address, phone, email, permit..."
           value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={filterCounty} onChange={(e) => setFilterCounty(e.target.value)}>
@@ -1323,13 +1334,6 @@ const [totalCount, setTotalCount] = useState(0);
         </select>
         <button className="refresh-btn" onClick={fetchLeads}>Refresh</button>
         <button onClick={() => setShowAddProspect(true)} style={smallGreen}>+ Add Contact</button>
-        <button
-          disabled={!selectedLead}
-          onClick={() => selectedLead && setEditingLead(selectedLead)}
-          style={selectedLead ? smallBlue : { ...smallBlue, background: "#94a3b8", cursor: "not-allowed" }}
-        >
-          Open/Edit Selected
-        </button>
         <button onClick={() => runActivityReport("today")} style={smallBlue}>Daily Activity</button>
         <button onClick={() => runActivityReport("week")} style={smallBlue}>Weekly Activity</button>
         <button onClick={() => runFollowUpReport("week")} style={smallBlue}>Follow-Ups</button>
@@ -1337,7 +1341,7 @@ const [totalCount, setTotalCount] = useState(0);
 
       {error && <div style={{ margin: 12, padding: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>{error}</div>}
 
-      <div className="content">
+      <div className="content" style={{ paddingBottom: 92 }}>
         <div style={{ padding: "10px 14px", color: "#64748b", fontSize: 13 }}>
           Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads
         </div>
@@ -1385,22 +1389,37 @@ const [totalCount, setTotalCount] = useState(0);
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "10px 0 16px", flexWrap: "wrap" }}>
+        <div style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 900,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 7,
+          padding: "10px 12px 14px",
+          flexWrap: "wrap",
+          background: "#ffffff",
+          borderTop: "1px solid #cfdbea",
+          boxShadow: "0 -3px 12px rgba(15, 76, 129, 0.12)"
+        }}>
           <span style={{ color: "#184f89", fontWeight: 800, fontSize: 13, marginRight: 8 }}>
-            Page {page} of {totalPages} — showing {leads.length.toLocaleString()} of {totalCount.toLocaleString()} leads
+            Page {page} of {totalPages} | {PAGE_SIZE.toLocaleString()} leads per page | showing {leads.length.toLocaleString()} of {totalCount.toLocaleString()}
           </span>
           <button style={smallBlue} disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
           {pageNumbers.map((p, idx) => {
             const prev = pageNumbers[idx - 1];
             return (
               <React.Fragment key={p}>
-                {idx > 0 && p > prev + 1 && <span style={{ padding: "0 5px" }}>...</span>}
+                {idx > 0 && p > prev + 1 && <span style={{ padding: "0 5px", color: "#64748b" }}>...</span>}
                 <button onClick={() => setPage(p)} style={p === page ? smallGreen : smallBlue}>{p}</button>
               </React.Fragment>
             );
           })}
           <button style={smallBlue} disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
-          <span style={{ marginLeft: 10, fontSize: 13 }}>Go to:</span>
+          <span style={{ marginLeft: 10, fontSize: 13, color: "#334155" }}>Go to:</span>
           <input type="number" min="1" max={totalPages} value={page} onChange={(e) => setPage(Math.max(1, Math.min(totalPages, Number(e.target.value) || 1)))}
             style={{ width: 65, padding: 6, border: "1px solid #cfdbea", borderRadius: 4 }} />
         </div>

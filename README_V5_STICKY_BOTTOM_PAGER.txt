@@ -1,0 +1,1 @@
+V5 update: Bottom page controls are now fixed/sticky at the bottom of the browser window so they stay visible while scrolling the leads. PAGE_SIZE is set to 1000 to match the Supabase hosted API row return limit unless the Supabase project max row setting is raised.
