@@ -30,6 +30,24 @@ const COMMON_COUNTIES = [
   "Randolph", "Richmond", "Rockingham", "Rowan", "Stanly", "Yadkin"
 ];
 
+const LEAD_TABLE_COLUMNS = [
+  { key: "lead_score", label: "Score", sortFields: ["lead_score"], defaultDirection: "desc" },
+  { key: "lead_status", label: "Status", sortFields: ["lead_status"], defaultDirection: "asc" },
+  { key: "lead_category", label: "Category", sortFields: ["lead_category"], defaultDirection: "asc" },
+  { key: "lead_name", label: "Lead Name", sortFields: ["lead_name"], defaultDirection: "asc" },
+  { key: "property_address", label: "Property Address", sortFields: ["property_address"], defaultDirection: "asc" },
+  { key: "county", label: "County", sortFields: ["county"], defaultDirection: "asc" },
+  { key: "city", label: "City", sortFields: ["city"], defaultDirection: "asc" },
+  { key: "zip", label: "Zip", sortFields: ["zip"], defaultDirection: "asc" },
+  { key: "owner_name", label: "Owner", sortFields: ["owner_name"], defaultDirection: "asc" },
+  { key: "contractor_name", label: "Builder / Contractor", sortFields: ["contractor_name"], defaultDirection: "asc" },
+  { key: "phone", label: "Phone", sortFields: ["property_manager_phone", "contractor_phone"], defaultDirection: "asc" },
+];
+
+function getSortColumn(key) {
+  return LEAD_TABLE_COLUMNS.find((column) => column.key === key) || LEAD_TABLE_COLUMNS[0];
+}
+
 const STATUS_COLORS = {
   New: "#3b82f6",
   Contacted: "#f59e0b",
@@ -1077,7 +1095,8 @@ function AddProspectModal({ onClose, onSaved }) {
 function Dashboard({ user }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-const [totalCount, setTotalCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortConfig, setSortConfig] = useState({ key: "lead_score", direction: "desc" });
   const [search, setSearch] = useState("");
   const [filterCounty, setFilterCounty] = useState("All");
   const [filterCategory, setFilterCategory] = useState("All");
@@ -1127,10 +1146,18 @@ const [totalCount, setTotalCount] = useState(0);
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error: fetchError, count } = await buildLeadQuery(true)
-      .order("lead_score", { ascending: false, nullsFirst: false })
-      .order("lead_name", { ascending: true, nullsFirst: false })
-      .range(from, to);
+    const sortColumn = getSortColumn(sortConfig.key);
+    const ascending = sortConfig.direction === "asc";
+
+    let query = buildLeadQuery(true);
+    sortColumn.sortFields.forEach((field) => {
+      query = query.order(field, { ascending, nullsFirst: false });
+    });
+    if (!sortColumn.sortFields.includes("lead_name")) {
+      query = query.order("lead_name", { ascending: true, nullsFirst: false });
+    }
+
+    const { data, error: fetchError, count } = await query.range(from, to);
 
     if (fetchError) {
       setError(fetchError.message);
@@ -1142,7 +1169,7 @@ const [totalCount, setTotalCount] = useState(0);
     }
 
     setLoading(false);
-  }, [buildLeadQuery, page]);
+  }, [buildLeadQuery, page, sortConfig]);
 
   useEffect(() => {
     fetchLeads();
@@ -1158,7 +1185,7 @@ const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     setSelectedLeadId(null);
-  }, [page, search, filterCounty, filterCategory, filterStatus]);
+  }, [page, search, filterCounty, filterCategory, filterStatus, sortConfig]);
 
   const selectedLead = selectedLeadId ? leads.find((l) => l.id === selectedLeadId) : null;
   const editingLeadIndex = editingLead ? leads.findIndex((l) => l.id === editingLead.id) : -1;
@@ -1284,6 +1311,20 @@ const [totalCount, setTotalCount] = useState(0);
     });
   };
 
+  const changeSort = (key) => {
+    const column = getSortColumn(key);
+    setPage(1);
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key ? (prev.direction === "asc" ? "desc" : "asc") : column.defaultDirection,
+    }));
+  };
+
+  const sortLabel = (key) => {
+    if (sortConfig.key !== key) return "↕";
+    return sortConfig.direction === "asc" ? "▲" : "▼";
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -1345,7 +1386,7 @@ const [totalCount, setTotalCount] = useState(0);
 
       <div className="content" style={{ paddingTop: 205, paddingBottom: 92, display: "block", overflow: "visible", height: "auto" }}>
         <div style={{ padding: "10px 14px", color: "#64748b", fontSize: 13 }}>
-          Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads
+          Showing {totalCount ? ((page - 1) * PAGE_SIZE + 1).toLocaleString() : 0} - {Math.min(page * PAGE_SIZE, totalCount).toLocaleString()} of {totalCount.toLocaleString()} leads · sorted by {getSortColumn(sortConfig.key).label} {sortConfig.direction === "asc" ? "A-Z / low-high" : "Z-A / high-low"}
         </div>
 
         {loading ? (
@@ -1357,8 +1398,30 @@ const [totalCount, setTotalCount] = useState(0);
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
-                  {["Score", "Status", "Category", "Lead Name", "Property Address", "County", "City", "Zip", "Owner", "Builder / Contractor", "Phone"].map((h) => (
-                    <th key={h} style={{ textAlign: "left", padding: "8px 7px", background: "#eaf1fa", color: "#0f4c81", borderBottom: "1px solid #cfdbea", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 120 }}>{h}</th>
+                  {LEAD_TABLE_COLUMNS.map((column) => (
+                    <th
+                      key={column.key}
+                      onClick={() => changeSort(column.key)}
+                      title={`Sort by ${column.label}`}
+                      style={{
+                        textAlign: "left",
+                        padding: "8px 7px",
+                        background: sortConfig.key === column.key ? "#dbeafe" : "#eaf1fa",
+                        color: "#0f4c81",
+                        borderBottom: "1px solid #cfdbea",
+                        whiteSpace: "nowrap",
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 120,
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        {column.label}
+                        <span style={{ fontSize: 10, color: sortConfig.key === column.key ? "#1d4ed8" : "#64748b" }}>{sortLabel(column.key)}</span>
+                      </span>
+                    </th>
                   ))}
                 </tr>
               </thead>
