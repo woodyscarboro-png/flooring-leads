@@ -128,6 +128,15 @@ function getChurchEmailFromForm(form) {
   return form.property_manager_email || form.owner_email2 || form.contractor_email || form.contractor_email2 || "";
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function churchIntroSubject(churchName) {
   return `Can I Help With Future Flooring Needs at ${churchName}?`;
 }
@@ -702,6 +711,48 @@ function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev,
     setMessage("Intro email bounce noted for this church.");
   };
 
+  const printChurchLetter = async () => {
+    const churchName = getChurchNameFromLead(form);
+    const address = form.property_address || form.owner_mailing_address || form.contractor_address || "";
+    const cityLine = [form.city || form.contractor_city, form.state || form.contractor_state || "NC", form.zip || form.contractor_zip].filter(Boolean).join(", ");
+    const dateStr = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Church Flooring Letter</title>
+<style>
+body{font-family:Cambria,'Times New Roman',serif;font-size:12pt;line-height:1.55;margin:0.75in 1in;color:#000}
+button{font-family:Arial,sans-serif;margin-bottom:18px;padding:8px 16px;background:#1A5FA8;color:#fff;border:none;border-radius:5px;font-weight:bold}
+@media print{button{display:none}}
+</style></head><body>
+<button onclick="window.print()">Print Church Letter</button>
+<p><b>Woody Scarboro</b><br>KQF Wholesale Flooring<br>10417 S. Main St.<br>Archdale, NC 27263<br>336-870-6706<br>336-434-4440<br>woody@keithsqf.com<br>https://www.keithsqualityflooring.com/</p>
+<p>${dateStr}</p>
+<p>${escapeHtml(churchName)}<br>${escapeHtml(address)}<br>${escapeHtml(cityLine)}</p>
+<p>Dear Pastor, Facilities Director, or Church Leadership Team:</p>
+<p>My name is Woody Scarboro, and I work with KQF Wholesale Flooring in Archdale. I wanted to introduce myself in case your church has any flooring needs now or may be planning updates in the future.</p>
+<p>We help with flooring for sanctuaries, Sunday school rooms, fellowship halls, offices, classrooms, entry areas, outbuildings, and other church spaces. We offer LVP, laminate, carpet, carpet tile, engineered hardwood, ceramic tile, and vinyl, with both professional installation and cash-and-carry options available.</p>
+<p>I would appreciate the opportunity to meet with you, look over any areas you may be considering, and help you compare practical flooring options that fit your needs and budget. Even if nothing is planned right now, I would be glad to be a local contact for future repairs, updates, or larger projects.</p>
+<p>I have a short KQF Wholesale Flooring packet and business card available, and you can also review our website here:<br>https://www.keithsqualityflooring.com/</p>
+<p>Thank you for your time, and I would be happy to talk whenever it is helpful.</p>
+<br>
+<p>Sincerely,</p>
+<br><br>
+<p><b>Woody Scarboro</b><br>Sales<br>KQF Wholesale Flooring</p>
+</body></html>`;
+
+    const w = window.open("", "_blank");
+    w.document.write(html);
+    w.document.close();
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "letter",
+      actionText: `Church flooring letter created for ${churchName}`,
+      contactLabel: churchName,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+  };
+
   const createLetterFor = async ({ name, address, city, state, zip, label }) => {
     const cityLine = [city, state, zip].filter(Boolean).join(", ");
     const firstName = name ? name.split(/\s+/)[0] : "Sir or Madam";
@@ -902,32 +953,25 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
   const smallGray = { padding: "7px 12px", border: "none", borderRadius: 5, background: "#64748b", color: "#fff", fontWeight: 800, cursor: "pointer" };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "94vw", maxWidth: 1180, height: "94vh", maxHeight: "94vh", background: "#fff", borderRadius: 10, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "12px 16px", background: "#f4f7fb", borderBottom: "1px solid #dbe6f5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: "min(1100px, calc(100vw - 40px))", height: "min(820px, calc(100vh - 40px))", background: "#fff", border: "1px solid #9aa8bc", borderRadius: 2, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 10px 30px rgba(15,23,42,.35)" }}>
+        <div style={{ padding: "8px 12px", background: "#f4f6f9", borderBottom: "1px solid #d0d8e4", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
-            <div style={{ fontWeight: 800, color: "#184f89", fontSize: 18 }}>Lead Detail — {getLeadName({ ...lead, ...form })}</div>
-            <div style={{ color: "#64748b", fontSize: 12 }}>{form.county || "No county"} · {form.property_address || form.contractor_address || "No address"}</div>
-          </div>
-          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-            <button disabled={!hasPrev} onClick={onPrev} style={smallBlue}>Previous</button>
-            <button disabled={!hasNext} onClick={onNext} style={smallBlue}>Next</button>
-            <button onClick={saveAll} disabled={saving} style={smallGreen}>{saving ? "Saving..." : "Save All Changes"}</button>
-            <button onClick={deleteLead} style={smallRed}>Delete This Lead</button>
-            <button onClick={onClose} style={smallGray}>Close</button>
+            <div style={{ fontWeight: 800, color: "#184f89", fontSize: 14 }}>Lead Detail — {getLeadName({ ...lead, ...form })}</div>
+            <div style={{ color: "#64748b", fontSize: 11 }}>{form.county || "No county"} · {form.property_address || form.contractor_address || "No address"}</div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e5edf7" }}>
+        <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #d0d8e4", background: "#ffffff", flexShrink: 0 }}>
           {[
-            ["edit", "Edit Info"],
-            ["schedule", "Schedule Follow-Up"],
-            ["history", "Follow-Up History"],
-            ["summary", "Lead Summary"],
+            ["edit", "✎  Edit Info"],
+            ["schedule", "▣  Schedule Follow-Up"],
+            ["history", "▣  Follow-Up History"],
+            ["summary", "▣  Lead Summary"],
           ].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
-              padding: "10px 16px", border: "none", background: tab === key ? "#1A5FA8" : "#fff",
-              color: tab === key ? "#fff" : "#184f89", fontWeight: 800, cursor: "pointer",
+              padding: "8px 14px", border: "none", borderRight: "1px solid #d0d8e4", background: tab === key ? "#1A5FA8" : "#fff",
+              color: tab === key ? "#fff" : "#184f89", fontWeight: 800, cursor: "pointer", fontSize: 13,
             }}>{label}</button>
           ))}
         </div>
@@ -1035,6 +1079,7 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
                   <div style={{ color: "#184f89", fontWeight: 800, marginBottom: 8 }}>Church Outreach</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={openChurchIntroEmail} style={smallGreen}>Church Intro Email</button>
+                    <button onClick={printChurchLetter} style={smallBlue}>Print Church Letter</button>
                     <button onClick={markChurchIntroBounced} style={smallRed}>Mark Intro Email Bounced</button>
                   </div>
                   <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
@@ -1135,6 +1180,16 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
               <p><b>Source:</b> {form.source_name}</p>
             </div>
           )}
+        </div>
+
+        <div style={{ padding: "8px 10px", background: "#E0E8F4", borderTop: "1px solid #d0d8e4", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button onClick={deleteLead} style={smallRed}>🗑  Delete This Lead</button>
+          <div style={{ flex: 1 }} />
+          <button disabled={!hasPrev} onClick={onPrev} style={{ ...smallBlue, opacity: hasPrev ? 1 : .55, cursor: hasPrev ? "pointer" : "default" }}>◀  Previous</button>
+          <button disabled={!hasNext} onClick={onNext} style={{ ...smallBlue, opacity: hasNext ? 1 : .55, cursor: hasNext ? "pointer" : "default" }}>Next  ▶</button>
+          <button onClick={onClose} style={smallBlue}>Close</button>
+          {message && <span style={{ color: message === "Saved." ? "#166534" : "#9a3412", fontWeight: 800, fontSize: 12, padding: "0 6px" }}>{message === "Saved." ? "✓ Saved" : "• Message"}</span>}
+          <button onClick={saveAll} disabled={saving} style={smallBlue}>▣  {saving ? "Saving..." : "Save All Changes"}</button>
         </div>
       </div>
     </div>
