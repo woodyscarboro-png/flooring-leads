@@ -11,6 +11,7 @@ const FOLLOW_UP_STATUSES = ["Scheduled", "Completed", "Cancelled", "No Answer"];
 
 const COMMON_CATEGORIES = [
   "All",
+  "church",
   "apartment_complex",
   "builder",
   "commercial_property",
@@ -117,6 +118,43 @@ function getLeadEmail(lead) {
 
 function getLeadWebsite(lead) {
   return lead.owner_website || lead.contractor_website || "";
+}
+
+function getChurchNameFromLead(lead) {
+  return lead.lead_name || lead.owner_name || lead.contractor_name || lead.property_address || "your church";
+}
+
+function getChurchEmailFromForm(form) {
+  return form.property_manager_email || form.owner_email2 || form.contractor_email || form.contractor_email2 || "";
+}
+
+function churchIntroSubject(churchName) {
+  return `Can I Help With Future Flooring Needs at ${churchName}?`;
+}
+
+function churchIntroBody(churchName) {
+  return `Dear Pastor, Facilities Director, or Church Leadership Team,
+
+My name is Woody Scarboro, and I work with KQF Wholesale Flooring in Archdale. I wanted to reach out and introduce myself in case ${churchName || "your church"} has any flooring needs now or may be planning updates in the future.
+
+We help with flooring for sanctuaries, Sunday school rooms, fellowship halls, offices, classrooms, entry areas, outbuildings, and other church spaces. We offer LVP, laminate, carpet, carpet tile, engineered hardwood, ceramic tile, and vinyl, with both professional installation and cash-and-carry options available.
+
+I would appreciate the opportunity to meet with you, look over any areas you may be considering, and help you compare practical flooring options that fit your needs and budget. Even if nothing is planned right now, I would be glad to be a local contact for future repairs, updates, or larger projects.
+
+I have a short KQF Wholesale Flooring packet and business card available, and you can also review our website here:
+https://www.keithsqualityflooring.com/
+
+Thank you for your time, and I would be happy to talk whenever it is helpful.
+
+Sincerely,
+
+Woody Scarboro
+Sales
+KQF Wholesale Flooring
+336-870-6706
+336-434-4440
+woody@keithsqf.com
+10417 S. Main St., Archdale, NC 27263`;
 }
 
 function safeExtraContacts(value) {
@@ -624,6 +662,46 @@ function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev,
     window.location.href = `mailto:${email}`;
   };
 
+  const isChurchLead = String(form.lead_category || "").toLowerCase() === "church";
+
+  const openChurchIntroEmail = async () => {
+    const email = getChurchEmailFromForm(form);
+    const churchName = getChurchNameFromLead(form);
+    if (!email) {
+      setMessage("This church lead does not have an email address yet.");
+      return;
+    }
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "email",
+      actionText: `Church introductory email prepared/sent to ${email}`,
+      contactLabel: churchName,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+
+    const subject = churchIntroSubject(churchName);
+    const body = churchIntroBody(churchName);
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const markChurchIntroBounced = async () => {
+    const email = getChurchEmailFromForm(form);
+    const churchName = getChurchNameFromLead(form);
+    await logMeaningfulActivity({
+      lead,
+      actionType: "email_bounced",
+      actionText: `Intro email bounced${email ? ` from ${email}` : ""} — bad email address. Need updated contact email.`,
+      contactLabel: churchName,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+    setMessage("Intro email bounce noted for this church.");
+  };
+
   const createLetterFor = async ({ name, address, city, state, zip, label }) => {
     const cityLine = [city, state, zip].filter(Boolean).join(", ");
     const firstName = name ? name.split(/\s+/)[0] : "Sir or Madam";
@@ -951,6 +1029,19 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
               <div style={{ marginTop: 12 }}>
                 <button onClick={addContractorContact} style={smallBlue}>Add New Contact at Contractor</button>
               </div>
+
+              {isChurchLead && (
+                <div style={{ marginTop: 14, marginBottom: 10, padding: 12, border: "1px solid #dbe6f5", borderRadius: 8, background: "#f8fafc" }}>
+                  <div style={{ color: "#184f89", fontWeight: 800, marginBottom: 8 }}>Church Outreach</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={openChurchIntroEmail} style={smallGreen}>Church Intro Email</button>
+                    <button onClick={markChurchIntroBounced} style={smallRed}>Mark Intro Email Bounced</button>
+                  </div>
+                  <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
+                    Email opens with the church message filled in. Attach the KQF packet manually before sending if needed.
+                  </div>
+                </div>
+              )}
 
               <div style={sectionTitle}>Permit / Source Details</div>
               <FieldRow label="Permit #"><TextInput value={form.permit_number} onChange={(v) => set("permit_number", v)} /></FieldRow>
@@ -1294,6 +1385,35 @@ function Dashboard({ user }) {
     });
   };
 
+  const runBouncedChurchReport = async () => {
+    const { data, error: reportError } = await supabase
+      .from("leads")
+      .select("id, lead_name, owner_name, contractor_name, property_address, county, city, property_manager_phone, contractor_phone, property_manager_email, contractor_email, notes")
+      .eq("lead_category", "church")
+      .ilike("notes", "%intro email bounced%")
+      .order("lead_name", { ascending: true })
+      .limit(1000);
+
+    if (reportError) {
+      alert(reportError.message);
+      return;
+    }
+
+    setReport({
+      title: "Church Intro Email Bounced",
+      rows: data || [],
+      columns: [
+        { key: "name", label: "Church", render: (r) => getLeadName(r) },
+        { key: "county", label: "County" },
+        { key: "city", label: "City" },
+        { key: "phone", label: "Phone", render: (r) => getLeadPhone(r) },
+        { key: "email", label: "Email", render: (r) => getLeadEmail(r) },
+        { key: "property_address", label: "Address" },
+        { key: "notes", label: "Notes" },
+      ],
+    });
+  };
+
   const runFollowUpReport = async (scope) => {
     const today = todayISO();
     let to = today;
@@ -1407,6 +1527,7 @@ function Dashboard({ user }) {
         <button onClick={() => runActivityReport("today")} style={smallBlue}>Daily Activity</button>
         <button onClick={() => runActivityReport("week")} style={smallBlue}>Weekly Activity</button>
         <button onClick={() => runFollowUpReport("week")} style={smallBlue}>Follow-Ups</button>
+        <button onClick={runBouncedChurchReport} style={smallBlue}>Bounced Church Emails</button>
       </div>
 
       {error && <div style={{ margin: 12, padding: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 6 }}>{error}</div>}
