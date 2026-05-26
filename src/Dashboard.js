@@ -657,18 +657,39 @@ function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev,
     window.location.href = `tel:${cleanPhone(phone)}`;
   };
 
+  const openEmailCompose = (email, subject = "", body = "") => {
+    const cleanEmail = String(email || "").trim();
+    if (!cleanEmail) return false;
+
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(cleanEmail)}${subject ? `&su=${encodeURIComponent(subject)}` : ""}${body ? `&body=${encodeURIComponent(body)}` : ""}`;
+    const opened = window.open(gmailUrl, "_blank", "noopener,noreferrer");
+
+    if (!opened) {
+      const mailtoUrl = `mailto:${encodeURIComponent(cleanEmail)}${subject || body ? `?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}` : ""}`;
+      window.location.href = mailtoUrl;
+    }
+
+    return true;
+  };
+
   const handleEmail = async (email, label) => {
-    if (!email) return;
+    const cleanEmail = String(email || "").trim();
+    if (!cleanEmail) {
+      setMessage("This contact does not have an email address yet.");
+      return;
+    }
+
     await logMeaningfulActivity({
       lead,
       actionType: "email",
-      actionText: `Email prepared/sent to ${email}`,
+      actionText: `Email prepared/sent to ${cleanEmail}`,
       contactLabel: label,
       currentNotes: form.notes,
       setCurrentNotes: (notes) => set("notes", notes),
       onLeadPatch: patchLeadLocal,
     });
-    window.location.href = `mailto:${email}`;
+
+    openEmailCompose(cleanEmail);
   };
 
   const isChurchLead = String(form.lead_category || "").toLowerCase() === "church";
@@ -693,11 +714,7 @@ function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev,
 
     const subject = churchIntroSubject(churchName);
     const body = churchIntroBody(churchName);
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    const opened = window.open(gmailUrl, "_blank", "noopener,noreferrer");
-    if (!opened) {
-      window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    }
+    openEmailCompose(email, subject, body);
   };
 
   const printChurchIntroEmail = async () => {
