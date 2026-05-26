@@ -1025,6 +1025,20 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
                 <button onClick={() => createLetter("owner")} style={smallGreen}>Open Letter in Word (Owner)</button>
               </div>
 
+              {isChurchLead && (
+                <div style={{ marginLeft: 198, marginTop: 0, marginBottom: 12, padding: 10, border: "1px solid #dbe6f5", borderRadius: 8, background: "#f8fafc" }}>
+                  <div style={{ color: "#184f89", fontWeight: 800, marginBottom: 8 }}>Church Outreach</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={openChurchIntroEmail} style={smallGreen}>Church Intro Email</button>
+                    <button onClick={printChurchLetter} style={smallBlue}>Print Church Letter</button>
+                    <button onClick={markChurchIntroBounced} style={smallRed}>Mark Intro Email Bounced</button>
+                  </div>
+                  <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
+                    Email opens with the church message filled in. Attach the KQF packet manually before sending if needed.
+                  </div>
+                </div>
+              )}
+
               <div style={sectionTitle}>Contractor</div>
               <FieldRow label="Company Name"><TextInput value={form.contractor_name} onChange={(v) => set("contractor_name", v)} /></FieldRow>
               <NameRow label="Company Owner" firstValue={form.contractor_owner_first_name} miValue={form.contractor_owner_mi} lastValue={form.contractor_owner_last_name} onFirstChange={(v) => set("contractor_owner_first_name", v)} onMiChange={(v) => set("contractor_owner_mi", v)} onLastChange={(v) => set("contractor_owner_last_name", v)} />
@@ -1074,19 +1088,6 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
                 <button onClick={addContractorContact} style={smallBlue}>Add New Contact at Contractor</button>
               </div>
 
-              {isChurchLead && (
-                <div style={{ marginTop: 14, marginBottom: 10, padding: 12, border: "1px solid #dbe6f5", borderRadius: 8, background: "#f8fafc" }}>
-                  <div style={{ color: "#184f89", fontWeight: 800, marginBottom: 8 }}>Church Outreach</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={openChurchIntroEmail} style={smallGreen}>Church Intro Email</button>
-                    <button onClick={printChurchLetter} style={smallBlue}>Print Church Letter</button>
-                    <button onClick={markChurchIntroBounced} style={smallRed}>Mark Intro Email Bounced</button>
-                  </div>
-                  <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
-                    Email opens with the church message filled in. Attach the KQF packet manually before sending if needed.
-                  </div>
-                </div>
-              )}
 
               <div style={sectionTitle}>Permit / Source Details</div>
               <FieldRow label="Permit #"><TextInput value={form.permit_number} onChange={(v) => set("permit_number", v)} /></FieldRow>
