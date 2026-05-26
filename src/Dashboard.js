@@ -693,7 +693,61 @@ function LeadModal({ lead, onClose, onSaved, onDeleted, onPrev, onNext, hasPrev,
 
     const subject = churchIntroSubject(churchName);
     const body = churchIntroBody(churchName);
-    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const opened = window.open(gmailUrl, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+  };
+
+  const printChurchIntroEmail = async () => {
+    const email = getChurchEmailFromForm(form);
+    const churchName = getChurchNameFromLead(form);
+    const subject = churchIntroSubject(churchName);
+    const body = churchIntroBody(churchName);
+    const gmailUrl = email
+      ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+      : "";
+
+    await logMeaningfulActivity({
+      lead,
+      actionType: "email",
+      actionText: `Church introductory email printed/reviewed${email ? ` for ${email}` : ""}`,
+      contactLabel: churchName,
+      currentNotes: form.notes,
+      setCurrentNotes: (notes) => set("notes", notes),
+      onLeadPatch: patchLeadLocal,
+    });
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Church Intro Email</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:780px;margin:36px auto;line-height:1.45;color:#111827}
+.toolbar{margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid #d1d5db}
+button,a.button{display:inline-block;background:#1f4f9f;color:#fff;border:0;border-radius:6px;padding:10px 14px;margin-right:8px;text-decoration:none;font-weight:bold;cursor:pointer}
+.meta{background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:12px;margin-bottom:18px}
+pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:15px;line-height:1.5}
+@media print{.toolbar{display:none}body{margin:0;max-width:none}.meta{border:0;background:#fff;padding:0}}
+</style></head><body>
+<div class="toolbar">
+<button onclick="window.print()">Print Church Intro Email</button>
+${gmailUrl ? `<a class="button" href="${gmailUrl}" target="_blank" rel="noreferrer">Open in Gmail</a>` : ""}
+</div>
+<h1>Church Intro Email</h1>
+<div class="meta">
+<div><b>To:</b> ${escapeHtml(email || "No email address on this lead")}</div>
+<div><b>Church:</b> ${escapeHtml(churchName)}</div>
+<div><b>Subject:</b> ${escapeHtml(subject)}</div>
+</div>
+<pre>${escapeHtml(body)}</pre>
+</body></html>`;
+    const w = window.open("", "_blank", "width=900,height=900");
+    if (!w) {
+      setMessage("Popup blocked. Allow popups for the web portal, then click Print Church Intro Email again.");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
 
   const markChurchIntroBounced = async () => {
@@ -1030,11 +1084,12 @@ button{margin-bottom:14px;padding:7px 20px;background:#1A5FA8;color:#fff;border:
                   <div style={{ color: "#184f89", fontWeight: 800, marginBottom: 8 }}>Church Outreach</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={openChurchIntroEmail} style={smallGreen}>Church Intro Email</button>
+                    <button onClick={printChurchIntroEmail} style={smallBlue}>Print Church Intro Email</button>
                     <button onClick={printChurchLetter} style={smallBlue}>Print Church Letter</button>
                     <button onClick={markChurchIntroBounced} style={smallRed}>Mark Intro Email Bounced</button>
                   </div>
                   <div style={{ marginTop: 8, color: "#64748b", fontSize: 12 }}>
-                    Email opens with the church message filled in. Attach the KQF packet manually before sending if needed.
+                    Church Intro Email opens Gmail with the message filled in. Print Church Intro Email opens a printable copy of the exact email. Attach the KQF packet manually before sending if needed.
                   </div>
                 </div>
               )}
